@@ -37,27 +37,43 @@ for (input_directory in input_directories) {
   
   for (file_path in file_list) {
     number_iterations <- number_iterations + 1
-    print(paste("Number of files examined:", number_iterations))
-    row_name <- basename(file_path)
-
+    print(paste("Processing file number:", number_iterations))
+    print(paste("Processing file:", basename(file_path)))
+    
     # Read the content of the .shape file
     lines <- readLines(file_path)
-   
+
+    # Initialize a vector to store values for the current row based on columns
+    current_values <- numeric(num_columns)
+
     # Process each line in the file
     for (line in lines) {
-      # Split based on whitespace; handling potential tab or space separation
-      parts <- unlist(strsplit(line, "[\t\\s]+"))  # Splitting by whitespace or tab
-     
+      # Split the line by tab
+      parts <- unlist(strsplit(line, "\t"))  # Explicitly using tab as the delimiter 
+      
       if (length(parts) == 2) {
-        col1 <- as.integer(parts[1])  # First column (should be numbers 1 to 127)
-        value <- as.numeric(parts[2])  # Second column, numeric values of interest
+        col1 <- as.integer(parts[1])  # First column
+        value <- as.numeric(parts[2])  # Second column
         
-        if (col1 <= num_columns && col1 > 0) {
-          # Accumulate the values into the corresponding column
-          master_data_frame[row_name, as.character(col1)] <- master_data_frame[row_name, as.character(col1)] + (value)
+        # Print check to verify extracted values
+        print(paste("Extracted Column 1:", col1, "Value:", value))
+        
+        if (!is.na(value) && col1 <= num_columns && col1 > 0) {
+          # Store the value in the corresponding position
+          current_values[col1] <- current_values[col1] + value  # Direct accumulation
+        } else {
+          print(paste("Warning: Invalid data in file:", basename(file_path), "Column 1:", col1, "Value:", value))
         }
+      } else {
+        print(paste("Warning: Unexpected format in line:", line))
       }
     }
+
+    # Debug output for current values before adding
+    print(paste("Current Values for file:", basename(file_path), ":", toString(current_values)))
+
+    # Add current values to the master data frame
+    master_data_frame[row_name, ] <- current_values  # Directly set the values for the row
     
     # Ensure the row is added to the master data frame if it was not present (avoid NA issues)
     if (!(row_name %in% rownames(master_data_frame))) {
