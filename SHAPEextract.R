@@ -56,9 +56,6 @@ for (input_directory in input_directories) {
         col1 <- as.integer(parts[1])  # First column
         value <- as.numeric(parts[2])  # Second column
         
-        # Print check to verify extracted values
-        print(paste("Extracted Column 1:", col1, "Value:", value))
-        
         if (!is.na(value) && col1 <= num_columns && col1 > 0) {
           # Store the value in the corresponding position
           current_values[col1] <- current_values[col1] + value  # Direct accumulation
@@ -69,9 +66,6 @@ for (input_directory in input_directories) {
         print(paste("Warning: Unexpected format in line:", line))
       }
     }
-
-    # Debug output for current values before adding
-    print(paste("Current Values for file:", basename(file_path), ":", toString(current_values)))
 
     # Add current values to the master data frame
     master_data_frame[row_name, ] <- current_values  # Directly set the values for the row
