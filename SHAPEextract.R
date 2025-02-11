@@ -46,7 +46,7 @@ for (input_directory in input_directories) {
     # Process each line in the file
     for (line in lines) {
       # Split based on whitespace; handling potential tab or space separation
-      parts <- unlist(strsplit(line, "\\s+"))  # Splitting by whitespace
+      parts <- unlist(strsplit(line, "[\t\\s]+"))  # Splitting by whitespace or tab
      
       if (length(parts) == 2) {
         col1 <- as.integer(parts[1])  # First column (should be numbers 1 to 127)
