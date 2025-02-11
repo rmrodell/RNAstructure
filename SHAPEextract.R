@@ -38,7 +38,8 @@ for (input_directory in input_directories) {
   for (file_path in file_list) {
     number_iterations <- number_iterations + 1
     print(paste("Processing file number:", number_iterations))
-    print(paste("Processing file:", basename(file_path)))
+    row_name <- basename(file_path)  # Set row name to be the file name
+    print(paste("Processing file:", row_name))
     
     # Read the content of the .shape file
     lines <- readLines(file_path)
