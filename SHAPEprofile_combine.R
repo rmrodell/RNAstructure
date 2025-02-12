@@ -19,8 +19,24 @@ all_data_frames <- list()
 
 # Loop through each directory
 for (input_directory in input_directories) {
+  
+  cat("Processing directory:", input_directory, "\n")  # Debugging info
+  
+  if (!dir.exists(input_directory)) {  # Check if the directory exists
+    stop(paste("Directory does not exist:", input_directory))
+  }
+  
   # Get a list of all files that end with profile.txt in the directory
   file_list <- list.files(path = input_directory, pattern = "profile\\.txt$", full.names = TRUE)
+
+  # Debugging: Show the files found
+  if (length(file_list) == 0) {
+    cat("No 'profile.txt' files found in directory:", input_directory, "\n")
+    next   # Skip to the next directory
+  } else {
+    cat("Found 'profile.txt' files in directory:", input_directory, "\n")
+    cat("Files:", file_list, "\n")  # Print file names for verification
+  }
 
   # Loop through each file found
   for (file_path in file_list) {
@@ -33,17 +49,19 @@ for (input_directory in input_directories) {
 
     # Append the data frame to the list
     all_data_frames[[length(all_data_frames) + 1]] <- df
+    cat("Appended data from file:", df_file_name, "\n")  # Debug-Trace
   }
 }
 
 # Combine all data frames into one
-# If there are data frames in the list
 if (length(all_data_frames) > 0) {
+    print(length(all_data_frames))
   combined_data <- rbindlist(all_data_frames, use.names = TRUE, fill = TRUE)
 
   # Write the combined data to the output file
-  fwrite(combined_data, output_file, sep = "\t", quote = TRUE, row.names = FALSE)
+  fwrite(combined_data, output_file, sep = "\t", quote = TRUE)
+
   cat("Data successfully concatenated and written to", output_file, "\n")
 } else {
-  cat("No files found matching the pattern.\n")
+  cat("No files found matching the pattern across all directories.\n")
 }
