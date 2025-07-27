@@ -25,8 +25,8 @@ option_list <- list(
   make_option("--max_unpaired2", type = "integer", default = 7),  # Changed from max_unpaired
   make_option("--min_paired2", type = "integer", default = 3),
   make_option("--max_paired2", type = "integer", default = 10),
-  make_option("--include_unpaired1", type = "logical", default = TRUE, action = "store_false", help = "Include unpaired1 region"),
-  make_option("--include_paired2", type = "logical", default = TRUE, action = "store_false", help = "Include paired2 region")
+  make_option("--include_unpaired1", type = "logical", help = "Include unpaired1 region"),
+  make_option("--include_paired2", type = "logical", help = "Include paired2 region")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -48,6 +48,24 @@ include_paired2 <- opt$include_paired2
 sequence_names_file <- opt$input
 fold_files_dir <- opt$fold_dir
 output_csv <- opt$output
+
+cat("Parsed options:\n")
+cat("input_position:", input_position, "\n")
+cat("offset_range:", paste(offset_range, collapse="-"), "\n")
+cat("min_unpaired1:", min_unpaired1, "\n")
+cat("max_unpaired1:", max_unpaired1, "\n")
+cat("min_paired1:", min_paired1, "\n")
+cat("max_paired1:", max_paired1, "\n")
+cat("min_paired2:", min_paired2, "\n")
+cat("max_paired2:", max_paired2, "\n")
+cat("min_unpaired2:", min_unpaired2, "\n")
+cat("max_unpaired2:", max_unpaired2, "\n")
+cat("include_unpaired1:", include_unpaired1, "\n")
+cat("include_paired2:", include_paired2, "\n")
+cat("sequence_names_file:", sequence_names_file, "\n")
+cat("fold_files_dir:", fold_files_dir, "\n")
+cat("output_csv:", output_csv, "\n")
+cat("\n")
 
 # --- Read sequence IDs ---
 sequence_df <- read.csv(sequence_names_file, stringsAsFactors = FALSE)
