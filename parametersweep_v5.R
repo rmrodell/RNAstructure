@@ -22,23 +22,23 @@ SCRIPT_DIR <- get_script_path()
 PARAMETER_RANGES <- list(
   input_position = 59, 
   offset_min = 0:0,
-  offset_max = 1:1,
+  offset_max = 1:2,
   include_unpaired1 = c(FALSE, TRUE),
-  paired1_min = 2:2,
-  paired1_max = 4:5,
-  unpaired2_min = 3:3,
-  unpaired2_max = 4:4,
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
+  unpaired2_max = 4:9,
   include_paired2 = c(FALSE, TRUE)
 )
 
 UNPAIRED1_RANGES <- list(
-  unpaired1_min = 1:1,
-  unpaired1_max = 3:3
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
 )
 
 PAIRED2_RANGES <- list(
-  paired2_min = 2:2,
-  paired2_max = 3:3
+  paired2_min = 1:2,
+  paired2_max = 4:9
 )
 
 # Capture warnings
@@ -688,7 +688,7 @@ main <- function() {
 
   # Run parameter sweep
   cat("Starting parameter sweep. Results will be saved in:", output_dir, "\n")
-  results <- run_parameter_sweep(chunk_size = 8)
+  results <- run_parameter_sweep(chunk_size = 128)
   cat("Parameter sweep completed. Results are saved in:", output_dir, "\n")
 
   # Print summary of output files
