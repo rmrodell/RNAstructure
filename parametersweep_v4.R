@@ -224,44 +224,6 @@ calculate_statistics <- function(df, filtered_pool1_df) {
   )
 }
 
-# run_analysis <- function(params, run_dir, run_id) {
-#   dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
-  
-#   output_file <- file.path(run_dir, "motif_matches.csv")
-#   motif_matcher_path <- file.path(SCRIPT_DIR, "motif_matcher_v3.R")
-  
-#   if (!file.exists(motif_matcher_path)) {
-#     stop(paste("motif_matcher_v3.R not found at", motif_matcher_path))
-#   }
-
-#   cmd_output <- run_motif_matcher(motif_matcher_path, output_file, params)
-  
-#   if (!file.exists(output_file)) {
-#     cat("Error: Output file not created for run:", basename(run_dir), "\n")
-#     cat("Command output:\n", paste(cmd_output, collapse = "\n"), "\n")
-#     return(NULL)
-#   }
-
-#   df <- read.csv(output_file)
-  
-#   filtered_pool1_df <- pool1_df %>%
-#     filter(sapply(chr, function(x) any(str_detect(df$filename, fixed(x)))))
-  
-#   stats <- calculate_statistics(df, filtered_pool1_df)
-  
-#   analysis_results <- c(stats, params)
-  
-#   analysis_results_file <- file.path(run_dir, "analysis_results.csv")
-#   tryCatch({
-#     write.csv(data.frame(analysis_results), analysis_results_file, row.names = FALSE)
-#     #cat("Analysis results saved to:", analysis_results_file, "\n")
-#   }, error = function(e) {
-#     cat("Error saving analysis results:", e$message, "\n")
-#   })
-
-#   return(analysis_results)
-# }
-
 # Implementation for mutant generation, run on motif_matches.csv for each individual parameter file
 generate_mutants <- function(motif_matches_file, protect_pos = 60, run_id) {
     # Check if the file exists
@@ -479,9 +441,41 @@ run_rnafold_and_motif_matching <- function(params, run_id, run_dir, output_dir, 
       filter(sapply(chr, function(x) any(str_detect(rnafold_df$filename, fixed(x)))))
     
     rnafold_stats[[base_name]] <- calculate_statistics(rnafold_df, filtered_pool1_df)
+
+    # Compare mutant sequences
+    sequence_comparison <- compare_mutant_sequences(motif_match_results)
   }
   
-  return(list(results = motif_match_results, stats = rnafold_stats))
+  return(list(results = motif_match_results, stats = rnafold_stats, sequence_comparison = sequence_comparison))
+}
+
+# Identify sequences in disrupted and compensated
+compare_mutant_sequences <- function(motif_match_results) {
+  # Extract sequence names from each result
+  paired1_comp_seq <- if ("paired1_compensatory" %in% names(motif_match_results)) 
+                        motif_match_results[["paired1_compensatory"]]$filename else NULL
+  paired1_disr_seq <- if ("paired1_disruption" %in% names(motif_match_results)) 
+                        motif_match_results[["paired1_disruption"]]$filename else NULL
+  paired2_comp_seq <- if ("paired2_compensatory" %in% names(motif_match_results)) 
+                        motif_match_results[["paired2_compensatory"]]$filename else NULL
+  paired2_disr_seq <- if ("paired2_disruption" %in% names(motif_match_results)) 
+                        motif_match_results[["paired2_disruption"]]$filename else NULL
+  
+  # Compare sequences
+  paired1_shared <- if (!is.null(paired1_comp_seq) && !is.null(paired1_disr_seq)) 
+                      length(intersect(paired1_comp_seq, paired1_disr_seq)) else NA
+  paired2_shared <- if (!is.null(paired2_comp_seq) && !is.null(paired2_disr_seq)) 
+                      length(intersect(paired2_comp_seq, paired2_disr_seq)) else NA
+  
+  all_sequences <- list(paired1_comp_seq, paired1_disr_seq, paired2_comp_seq, paired2_disr_seq)
+  all_sequences <- all_sequences[!sapply(all_sequences, is.null)]
+  all_shared <- if (length(all_sequences) > 0) length(Reduce(intersect, all_sequences)) else NA
+  
+  return(list(
+    paired1_shared = paired1_shared,
+    paired2_shared = paired2_shared,
+    all_shared = all_shared
+  ))
 }
 
 # functions to combine results
@@ -505,7 +499,9 @@ define_all_possible_columns <- function() {
     rnafold_columns <- c(rnafold_columns, paste0("rnafold_", type, "_", stat_columns))
   }
   
-  return(c(base_columns, initial_stat_columns, rnafold_columns))
+  comparison_columns <- c("paired1_shared", "paired2_shared", "all_shared")
+
+  return(c(base_columns, initial_stat_columns, rnafold_columns, comparison_columns))
 }
 
 generate_summary_df <- function(params, initial_analysis, rnafold_analysis, all_possible_columns) {
@@ -534,6 +530,13 @@ generate_summary_df <- function(params, initial_analysis, rnafold_analysis, all_
       if (stat_col %in% colnames(summary_df)) {
         summary_df[[stat_col]] <- rnafold_analysis$stats[[name]][[stat_name]]
       }
+    }
+  }
+
+  # Fill in sequence comparison results
+  for (comp_name in names(rnafold_analysis$sequence_comparison)) {
+    if (comp_name %in% colnames(summary_df)) {
+      summary_df[[comp_name]] <- rnafold_analysis$sequence_comparison[[comp_name]]
     }
   }
   
@@ -629,228 +632,6 @@ run_parameter_sweep <- function(chunk_size = 1000) {
 }
 
 
-# run_parameter_sweep <- function(chunk_size = 1000) {
-#   valid_combinations <- generate_parameter_combinations()
-#   total_combinations <- nrow(valid_combinations)
-  
-#   cat("Total number of combinations to test:", total_combinations, "\n")
-
-#   # Set up parallel processing
-#   num_cores <- future::availableCores() - 1
-#   plan(multisession, workers = num_cores)
-
-#   results_list <- vector("list", total_combinations)
-  
-#   for (chunk_start in seq(1, total_combinations, by = chunk_size)) {
-#     chunk_end <- min(chunk_start + chunk_size - 1, total_combinations)
-#     cat("Processing combinations", chunk_start, "to", chunk_end, "\n")
-    
-#     ## KF: tells future_lapply to run sequentially, making debugging easier
-#     plan(sequential)
-    
-#     chunk_results <- future_lapply(chunk_start:chunk_end, function(i) {
-      
-#       params <- valid_combinations[i,]
-#       params$input_file <- input_file
-#       params$fold_dir <- fold_dir
-#       ## KF: you are referencing params, but its not defined
-#       run_id <- create_run_id(params$input_position, params$offset_min, params$offset_max,
-#                               params$include_unpaired1, params$unpaired1_min, params$unpaired1_max,
-#                               params$paired1_min, params$paired1_max,
-#                               params$unpaired2_min, params$unpaired2_max,
-#                               params$include_paired2, params$paired2_min, params$paired2_max)
-#       run_dir <- file.path(output_dir, "individual_results", run_id)
-      
-#       dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
-
-#       # Step 1: Run initial analysis
-#       cat("Running initial motif matcher analysis...\n")
-#       initial_result <- find_motifs(params, run_dir)
-#       if (is.null(initial_result)) {
-#         cat("Error: Initial analysis returned NULL\n")
-#         return(NULL)
-#       }
-#       initial_count <- nrow(initial_result)
-
-#       # calculate statistics on the first motif matcher
-#       filtered_pool1_df <- pool1_df %>%
-#         filter(sapply(chr, function(x) any(str_detect(initial_result$filename, fixed(x)))))
-
-#       initial_stats <- calculate_statistics(initial_result, filtered_pool1_df)
-      
-#       # Step 2: Generate mutants
-#       cat("Generating mutants...\n")
-#       motif_matches_file <- file.path(run_dir, "motif_matches.csv")
-#       # cat("motif_matches.csv path:", motif_matches_file, "\n")
-#       if (!file.exists(motif_matches_file)) {
-#         cat("Error: motif_matches.csv does not exist\n")
-#         return(NULL)
-#       }
-      
-#       mutant_result <- generate_mutants(motif_matches_file, run_id = run_id)
-
-#       # Check if mutant_result is not NULL and has the expected structure
-#       if (is.null(mutant_result)) {
-#         cat("Error: generate_mutants returned NULL\n")
-#         return(NULL)
-#       }
-
-#       if (!is.data.frame(mutant_result)) {
-#         cat("Error: generate_mutants did not return a data frame\n")
-#         return(NULL)
-#       }
-
-#       # cat("Mutant generation successful\n")
-
-#       # Step 3: Create mutant FASTA files
-#       cat("Creating mutant FASTA files...\n")
-#       fasta_files <- create_mutant_fastas(input = mutant_result, output_dir = run_dir)
-
-#       # Combine results
-#       result <- list(
-#         params = params,
-#         initial_result = initial_result,
-#         mutant_result = mutant_result,
-#         fasta_files = fasta_files
-#       )
-      
-#       cat("Starting RNAfold...\n")
-#       rnafold_result <- run_rnafold(run_id = run_id, output_dir = output_dir, script_dir = SCRIPT_DIR)
-
-#       cat("Starting Motif Matching...\n")
-#       rnafold_results_dir <- file.path(output_dir, "individual_results", run_id, "rnafold_results")
-
-#       # Run motif matcher for each RNAfold output subfolder
-#       motif_match_results <- list()
-#       rnafold_counts <- list() 
-#       rnafold_stats <- list()
-
-#       for (subfolder in list.dirs(rnafold_results_dir, recursive = FALSE)) {
-#         base_name <- basename(subfolder)
-#         #output_file <- file.path(rnafold_results_dir, paste0(base_name, "_motif_matches.csv"))
-        
-#         # Ensure the subfolder exists
-#         dir.create(subfolder, recursive = TRUE, showWarnings = FALSE)
-        
-#         rnafold_df <- find_motifs(params, run_dir, 
-#                                   output_filename = paste0(base_name, "_motif_matches.csv"),
-#                                   fold_dir = subfolder)
-
-#         motif_match_results[[base_name]] <- rnafold_df
-#         rnafold_counts[[base_name]] <- nrow(rnafold_df)
-
-#         # Calculate statistics
-#         filtered_pool1_df <- pool1_df %>%
-#           filter(sapply(chr, function(x) any(str_detect(rnafold_df$filename, fixed(x)))))
-        
-#         rnafold_stats[[base_name]] <- calculate_statistics(rnafold_df, filtered_pool1_df)
-#       }
-
-#       # Save intermediate results
-#       saveRDS(result, file.path(run_dir, "intermediate_result.rds"))
-      
-#       # Create summary data frame
-#       summary_df <- data.frame(
-#         input_position = params$input_position,
-#         offset_min = params$offset_min,
-#         offset_max = params$offset_max,
-#         include_unpaired1 = params$include_unpaired1,
-#         unpaired1_min = params$unpaired1_min,
-#         unpaired1_max = params$unpaired1_max,
-#         paired1_min = params$paired1_min,
-#         paired1_max = params$paired1_max,
-#         unpaired2_min = params$unpaired2_min,
-#         unpaired2_max = params$unpaired2_max,
-#         include_paired2 = params$include_paired2,
-#         paired2_min = params$paired2_min,
-#         paired2_max = params$paired2_max,
-#         initial_motif_count = initial_count
-#       )
-      
-#       # Add initial statistics
-#       for (stat_name in names(initial_stats)) {
-#         summary_df[[paste0("initial_", stat_name)]] <- initial_stats[[stat_name]]
-#       }
-
-#       # Add RNAfold counts
-#       for (name in names(rnafold_counts)) {
-#         summary_df[[paste0("rnafold_", name, "_count")]] <- rnafold_counts[[name]]
-#       }
-
-#       # Add RNAfold counts and statistics
-#       for (name in names(rnafold_counts)) {
-#         summary_df[[paste0("rnafold_", name, "_count")]] <- rnafold_counts[[name]]
-#         for (stat_name in names(rnafold_stats[[name]])) {
-#           summary_df[[paste0("rnafold_", name, "_", stat_name)]] <- rnafold_stats[[name]][[stat_name]]
-#         }
-#       }
-
-#       # Save summary
-#       write.csv(summary_df, file.path(run_dir, "summary.csv"), row.names = FALSE)
-
-
-#       cat("Completed processing combination", i, "\n")
-#       cat("\n")
-#       return(result)
-    
-#     }, future.seed = TRUE)
-    
-#     # # Process and print the captured output
-#     # for (i in seq_along(chunk_results)) {
-#     #   cat(chunk_results[[i]]$output, sep = "\n")
-#     #   results_list[[chunk_start + i - 1]] <- chunk_results[[i]]$result
-#     # }
-    
-#     # # Checkpoint: save progress
-#     # saveRDS(results_list, file.path(output_dir, "checkpoint.rds"))
-#   }
-  
-#   # # Process and combine results
-#   # processed_results <- lapply(results_list, function(result) {
-#   #   if (is.null(result)) return(NULL)
-    
-#   #   data.frame(
-#   #     params = as.data.frame(result$params),
-#   #     initial_result = as.data.frame(result$initial_result),
-#   #     mutant_count = nrow(result$mutant_result),
-#   #     fasta_file_count = length(result$fasta_files),
-#   #     stringsAsFactors = FALSE
-#   #   )
-#   # })
-  
-#   # all_results <- do.call(rbind, processed_results)
-  
-#   # # Save final results
-#   # write.csv(all_results, file.path(output_dir, "all_analysis_results.csv"), row.names = FALSE)
-  
-#   # return(all_results)
-# }
-
-# process_results <- function(results) {
-#   # Remove NULL results
-#   results <- results[!sapply(results, is.null)]
-
-#   # Check if we have any valid results
-#   if (length(results) == 0) {
-#     cat("Error: No valid results were obtained.\n")
-#     return(NULL)
-#   }
-
-#   # Combine results
-#   all_results <- do.call(rbind, lapply(list.files(file.path(output_dir, "individual_results"), full.names = TRUE), function(dir) {
-#     read.csv(file.path(dir, "analysis_results.csv"))
-#   }))
-
-#   # Save all results
-#   write.csv(all_results, file.path(output_dir, "all_analysis_results.csv"), row.names = FALSE)
-
-#   cat("Number of valid results:", nrow(all_results), "\n")
-
-#   return(all_results)
-# }
-
-
-
 main <- function() {
   # Print the output directory
   cat("Results will be saved in:", output_dir, "\n")
@@ -879,69 +660,11 @@ main <- function() {
   return(results)
 }
 
-# main <- function() {
-#   # Initial setup and F1 score calculation (existing code)
-#   cat("Results will be saved in:", output_dir, "\n")
-#   cat("Calculating sequence-only F1 scores...\n")
-#   sequence_f1_scores <- calculate_sequence_f1_scores(pool1_df)
-#   cat(sequence_f1_scores, "\n\n")
-#   cat("Process started at:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n\n")
 
-#   # Run parameter sweep
-#   cat("Starting parameter sweep. Results will be saved in:", output_dir, "\n")
-#   initial_results <- run_parameter_sweep()
-
-#   # New steps
-#   cat("Generating mutants for matching sequences...\n")
-#   mutant_results <- generate_mutants(initial_results)
-
-#   cat("Creating FASTA files for mutants...\n")
-#   fasta_files <- create_mutant_fastas(mutant_results)
-
-#   cat("Running RNAfold on mutant sequences...\n")
-#   folded_mutants <- run_rnafold(fasta_files)
-
-#   cat("Re-running motif matcher on folded mutants...\n")
-#   mutant_motif_results <- rerun_motif_matcher(folded_mutants)
-
-#   cat("Annotating final results...\n")
-#   final_results <- annotate_results(initial_results, mutant_motif_results)
-
-#   # Save final results
-#   write_final_results(final_results, file.path(output_dir, "final_analysis_results.csv"))
-
-#   # Print summary and timestamps (existing code)
-#   cat("Parameter sweep and mutant analysis completed. Results are saved in:", output_dir, "\n")
-#   cat("\nSummary of output files:\n")
-#   cat("Final analysis results:", file.path(output_dir, "final_analysis_results.csv"), "\n")
-#   cat("Process finished at:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n\n")
-
-#   return(final_results)
-# }
-
-# Helper functions (to be implemented)
-
-
-
-
-rerun_motif_matcher <- function(folded_mutants) {
-  # Implementation for re-running motif matcher on folded mutants
-}
-
-annotate_results <- function(initial_results, mutant_motif_results) {
-  # Implementation for annotating and combining results
-}
-
-write_final_results <- function(final_results, output_file) {
-  # Implementation for writing the final CSV
-}
 
 # --- Run the main function ---
 
 results <- main()
-
-
-
 
   },
   warning = function(w) {
