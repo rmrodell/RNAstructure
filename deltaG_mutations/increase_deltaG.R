@@ -1,4 +1,6 @@
 library(Biostrings)
+library(dplyr)
+library(purrr)
 
 # ---- Helper functions ----
 
@@ -14,6 +16,13 @@ read_fold_file <- function(file_path) {
     warning(paste("File", file_path, "does not have the expected format"))
     return(NULL)
   }
+}
+
+# Function to read all .fold files in a directory
+read_all_fold_files <- function(fold_dir) {
+  fold_files <- list.files(fold_dir, pattern = "\\.fold$", full.names = TRUE)
+  fold_data <- map_dfr(fold_files, read_fold_file)
+  return(fold_data)
 }
 
 # Function to identify G:C base pairs in the region of interest
@@ -102,29 +111,8 @@ determine_location <- function(mutations, psipos) {
   }
 }
 
-process_fold_file <- function(file_path, psipos = 59) {
-  fold_data <- read_fold_file(file_path)
-  if (is.null(fold_data)) return(NULL)
-  
-  gc_pairs <- identify_gc_pairs(fold_data$seq, fold_data$dot_bracket, psipos)
-  mutation_result <- mutate_sequence(fold_data$seq, gc_pairs, psipos)
-  locations <- format_locations(gc_pairs, mutation_result$mutations)
-  location <- determine_location(mutation_result$mutations, psipos)
-  
-  return(data.frame(
-    name = fold_data$name,
-    seq = fold_data$seq,
-    psipos = psipos,
-    incG_seq = mutation_result$sequence,
-    location_basepair = locations$basepair,
-    location_mutation = locations$mutation,
-    location = location,
-    num_mutations = length(mutation_result$mutations),
-    stringsAsFactors = FALSE
-  ))
-}
-
-process_fold_file <- function(file_path, psipos = 59) {
+# Main running function for making mutations
+#process_fold_file <- function(file_path, psipos = 59) {
   fold_data <- read_fold_file(file_path)
   if (is.null(fold_data)) return(NULL)
   
@@ -148,6 +136,181 @@ process_fold_file <- function(file_path, psipos = 59) {
     stringsAsFactors = FALSE
   ))
 }
+# Main running function for making mutations
+process_fold_file <- function(file_path, psipos = 59) {
+  fold_data <- read_fold_file(file_path)
+  if (is.null(fold_data)) return(NULL)
+  
+  gc_pairs <- identify_gc_pairs(fold_data$seq, fold_data$dot_bracket, psipos)
+  mutation_result <- mutate_sequence(fold_data$seq, gc_pairs, psipos)
+  locations <- format_locations(gc_pairs, mutation_result$mutations)
+  location <- determine_location(mutation_result$mutations, psipos)
+  
+  result_df <- data.frame(
+    name = fold_data$name,
+    seq = fold_data$seq,
+    psipos = psipos,
+    incG_seq = mutation_result$sequence,
+    location_basepair = locations$basepair,
+    location_mutation = locations$mutation,
+    location = location,
+    num_mutations = length(mutation_result$mutations),
+    stringsAsFactors = FALSE
+  )
+  
+  # Use create_and_save_fasta to handle DNA conversion
+  fasta_file <- paste0(tools::file_path_sans_ext(file_path), "_mutated.fa")
+  create_and_save_fasta(result_df, "incG_seq", "name", "increased_deltaG_all.fa")
+  
+  return(result_df)
+}
+
+# Function to read and merge deltaG data
+read_and_merge_deltaG <- function(results_df, org_deltaG_path, inc_deltaG_path, deltaG_threshold = 5) {
+  org_deltaG_all <- read.csv(org_deltaG_path)
+  inc_deltaG_all <- read.csv(inc_deltaG_path)
+  
+  results_df %>%
+    left_join(org_deltaG_all %>% select(sequence_id, org_deltaG = mfe_energy), by = c("name" = "sequence_id")) %>%
+    left_join(inc_deltaG_all %>% select(sequence_id, mut_deltaG = mfe_energy), by = c("name" = "sequence_id")) %>%
+    mutate(
+      deltaG_change = mut_deltaG - org_deltaG,
+      deltaG_category = case_when(
+        deltaG_change > deltaG_threshold ~ "increase",
+        deltaG_change < -deltaG_threshold ~ "decrease",
+        TRUE ~ "no change"
+      )
+    )
+}
+
+# Function to filter and save increased deltaG sequences
+filter_and_save_increased_deltaG <- function(df, csv_path) {
+  increased_deltaG <- df %>% filter(deltaG_category == "increase")
+  write.csv(increased_deltaG, csv_path, row.names = FALSE)
+  increased_deltaG
+}
+
+# Function to create and save FASTA file
+create_and_save_fasta <- function(df, seq_column, name_column, fasta_path) {
+  named_sequences <- setNames(df[[seq_column]], df[[name_column]])
+  dna_sequences <- gsub("U", "T", named_sequences)
+  mutated_sequences <- DNAStringSet(dna_sequences)
+  
+  stopifnot(all(names(mutated_sequences) == df[[name_column]]))
+  
+  writeXStringSet(mutated_sequences, fasta_path, width = 10000)
+}
+
+# Function to print summary
+print_summary <- function(df) {
+  df %>%
+    summarise(
+      Total_sequences = n(),
+      Increased_deltaG = sum(deltaG_category == "increase"),
+      Decreased_deltaG = sum(deltaG_category == "decrease"),
+      No_change_deltaG = sum(deltaG_category == "no change")
+    ) %>%
+    print()
+}
+
+# Main function to run the analysis
+analyze_mutations <- function(results_df, org_deltaG_path, inc_deltaG_path, org_fold_dir, mut_fold_dir, csv_output_path, fasta_output_path, deltaG_threshold = 5) {
+  # Read and merge deltaG data
+  results_df_with_deltaG <- read_and_merge_deltaG(results_df, org_deltaG_path, inc_deltaG_path, deltaG_threshold)
+  
+  # Compare fold structures
+  fold_comparison <- compare_fold_structures(org_fold_dir, mut_fold_dir)
+  
+  # Merge deltaG and fold structure comparison results
+  comprehensive_results <- results_df_with_deltaG %>%
+    left_join(fold_comparison, by = "name") %>%
+    mutate(
+      deltaG_change = mut_deltaG - org_deltaG,
+      deltaG_category = case_when(
+        deltaG_change > deltaG_threshold ~ "increase",
+        deltaG_change < -deltaG_threshold ~ "decrease",
+        TRUE ~ "no change"
+      )
+    ) %>%
+    select(
+      name, 
+      num_mutations, 
+      org_deltaG, 
+      mut_deltaG, 
+      deltaG_change, 
+      deltaG_category,
+      num_differences,
+      fraction_different,
+      seq_org,
+      seq_mut,
+      dot_bracket_org,
+      dot_bracket_mut,
+      different_pairings
+    )
+  
+  # Filter for sequences where deltaG actually increased
+  increased_deltaG_actually <- comprehensive_results %>%
+    filter(deltaG_category == "increase")
+  
+  # Save results
+  write.csv(comprehensive_results, csv_output_path, row.names = FALSE)
+  create_and_save_fasta(increased_deltaG_actually, "seq_mut", "name", fasta_output_path)
+  
+  # Print summary
+  print_summary(comprehensive_results)
+  
+  # Return the comprehensive results
+  return(comprehensive_results)
+}
+
+# Function to compare dot-bracket notations
+compare_dot_brackets <- function(org_dot_bracket, mut_dot_bracket) {
+  if (nchar(org_dot_bracket) != nchar(mut_dot_bracket)) {
+    stop("Dot-bracket notations have different lengths")
+  }
+  
+  org_chars <- strsplit(org_dot_bracket, "")[[1]]
+  mut_chars <- strsplit(mut_dot_bracket, "")[[1]]
+  
+  different_positions <- which(org_chars != mut_chars)
+  differences <- length(different_positions)
+  
+  different_pairings <- data.frame(
+    position = different_positions,
+    original = org_chars[different_positions],
+    mutated = mut_chars[different_positions],
+    stringsAsFactors = FALSE
+  )
+  
+  return(list(
+    num_differences = differences,
+    fraction_different = differences / nchar(org_dot_bracket),
+    different_pairings = different_pairings
+  ))
+}
+
+# Workflow to compare dot-brackets
+compare_fold_structures <- function(org_fold_dir, mut_fold_dir) {
+  # Read original and mutated fold data
+  org_fold_data <- read_all_fold_files(org_fold_dir)
+  mut_fold_data <- read_all_fold_files(mut_fold_dir)
+  
+  # Merge the datasets
+  merged_data <- org_fold_data %>%
+    left_join(mut_fold_data, by = "name", suffix = c("_org", "_mut"))
+  
+  # Compare dot-brackets
+  comparison_results <- merged_data %>%
+    mutate(
+      comparison = map2(dot_bracket_org, dot_bracket_mut, compare_dot_brackets),
+      num_differences = map_dbl(comparison, "num_differences"),
+      fraction_different = map_dbl(comparison, "fraction_different"),
+      different_pairings = map(comparison, "different_pairings")
+    )
+  
+  return(comparison_results)
+}
+
 # ---- Execution ----
 
 # Main script
@@ -159,61 +322,41 @@ all_fold_files <- list.files(fold_dir, pattern = "\\.fold$", full.names = TRUE)
 results <- lapply(all_fold_files, process_fold_file)
 results_df <- do.call(rbind, results)
 
-# Create a named DNAStringSet
-named_sequences <- DNAStringSet(results_df$incG_seq_dna)
-names(named_sequences) <- results_df$name
 
 # Write output files
 write.csv(results_df, "increased_deltaG_all.csv", row.names = FALSE)
-writeXStringSet(named_sequences, "increased_deltaG_all.fa", width = 10000)
 
 
-# # testing script
-# # Test function by function
-# # Test read_fold_file
-# cat("Testing read_fold_file:\n")
-# sample_file <- all_fold_files[2]  # Take the first file as a sample
-# print(read_fold_file(sample_file))
-# fold_data <- read_fold_file(sample_file)
+# TO DO: implement as system2() calls
+# bash /scratch/users/rodell/motifmatcher/RNAstructure/run_RNAfold.sh increased_deltaG_all.fa RNAfold_incG
+# Rscript /scratch/users/rodell/motifmatcher/RNAstructure/deltaG_mutations/deltaG_RNAfold.R -i /scratch/users/rodell/deltaG/increase_deltaG/RNAfold_incG -o /scratch/users/rodell/deltaG/increase_deltaG
+
+
+# Analyze mutations
+# analyze_mutations(
+#   results_df,
+#   "/scratch/users/rodell/RNAfold_psipos/RNAfold_deltaG.csv",
+#   "/scratch/users/rodell/deltaG/increase_deltaG/RNAfold_deltaG.csv",
+#   "increased_deltaG_actually.csv",
+#   "increased_deltaG_actually.fa",
+#   deltaG_threshold = 5
+# )
 # 
-# # Test identify_gc_pairs
-# cat("Testing identify_gc_pairs:\n")
-# gc_pairs <- identify_gc_pairs(fold_data$seq, fold_data$dot_bracket, psipos = 59, window = 20)
+# # Compare dot brakcets
+# # Usage
+# org_fold_dir <- "/scratch/users/rodell/RNAfold_psipos"
+# mut_fold_dir <- "/scratch/users/rodell/deltaG/increase_deltaG/RNAfold_incG"
 # 
-# cat("Identified G:C pairs:\n")
-# for (i in seq_along(gc_pairs)) {
-#   pair <- gc_pairs[[i]]
-#   base1 <- substr(fold_data$seq, pair[1], pair[1])
-#   base2 <- substr(fold_data$seq, pair[2], pair[2])
-#   cat(sprintf("Pair %d: %s-%s at positions %d-%d\n",
-#               i, base1, base2, pair[1], pair[2]))
-# }
-# 
-# print(gc_pairs)
-# 
-# # Test mutate_sequence
-# cat("\nTesting mutate_sequence:\n")
-# mutation_result <- mutate_sequence(fold_data$seq, gc_pairs, psipos = 59)
-# print(mutation_result)
-# 
-# # Test format_locations
-# cat("\nTesting format_locations:\n")
-# locations <- format_locations(gc_pairs, mutation_result$mutations)
-# print(locations)
-# 
-# # Test determine_location
-# cat("\nTesting determine_location:\n")
-# location <- determine_location(mutation_result$mutations, psipos = 59)
-# print(location)
-# 
-# # Test process_fold_file
-# cat("\nTesting process_fold_file:\n")
-# result <- process_fold_file(sample_file, psipos = 59)
-# print(result)
-# 
-# # Test the full process on a few files
-# cat("\nTesting full process on multiple files:\n")
-# test_files <- all_fold_files[1:5]  # Test with the first 5 files
-# results <- lapply(test_files, process_fold_file)
-# results_df <- do.call(rbind, results)
-# print(results_df)
+# comparison_results <- compare_fold_structures(org_fold_dir, mut_fold_dir)
+
+# Usage
+results <- analyze_mutations(
+  results_df = results_df,  # Your original results dataframe
+  org_deltaG_path = "/scratch/users/rodell/RNAfold_psipos/RNAfold_deltaG.csv",
+  inc_deltaG_path = "/scratch/users/rodell/deltaG/increase_deltaG/RNAfold_deltaG.csv",
+  org_fold_dir = "/scratch/users/rodell/RNAfold_psipos",
+  mut_fold_dir = "/scratch/users/rodell/deltaG/increase_deltaG/RNAfold_incG",
+  csv_output_path = "comprehensive_mutation_analysis.csv",
+  fasta_output_path = "increased_deltaG_actually.fa",
+  deltaG_threshold = 5
+)
