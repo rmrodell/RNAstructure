@@ -23,7 +23,10 @@ option_list <- list(
               help = "Window size around psipos to look for G-C pairs. [default: %default]", metavar = "INT"),
   
   make_option(c("-d", "--deltaG_threshold"), type = "double", default = 5.0,
-              help = "Threshold for significant deltaG change. [default: %default]", metavar = "NUM")
+              help = "Threshold for significant deltaG change. [default: %default]", metavar = "NUM"),
+  
+  make_option(c("-s", "--mutation_strategy"), type = "character", default = "AU",
+              help = "Mutation strategy: 'AU' (G->A and C->U) or 'GU' (C->U only). [default: %default]", metavar = "STR")
 )
 
 # 2. Create the parser and parse the arguments.
@@ -36,16 +39,23 @@ if (is.null(opt$fold_dir) || is.null(opt$output_dir)) {
   stop("Both --fold_dir and --output_dir must be supplied.", call. = FALSE)
 }
 
+# Validate the mutation strategy input
+valid_strategies <- c("AU", "GU")
+if (!opt$mutation_strategy %in% valid_strategies) {
+  stop(paste("Invalid --mutation_strategy. Must be one of:", paste(valid_strategies, collapse = ", ")), call. = FALSE)
+}
+
 # ---- Interactive Debugging Setup ----
-# # If running in RStudio, manually define the 'opt' list with your test arguments.
-# cat("Running in interactive mode. Using manual 'opt' list for debugging.\n")
-# 
+# If running in RStudio, manually define the 'opt' list with your test arguments.
+cat("Running in interactive mode. Using manual 'opt' list for debugging.\n")
+
 # opt <- list(
 #   fold_dir = "/scratch/users/rodell/RNAfold_psipos",
-#   output_dir = "/scratch/users/rodell/deltaG/alter_deltaG/increase_AU/window7",
+#   output_dir = "/scratch/users/rodell/deltaG/alter_deltaG/increase_GUAU/GUwindow7",
 #   psipos = 59,
 #   window = 7, # This was specified in your command
-#   deltaG_threshold = 5.0
+#   deltaG_threshold = 5.0,
+#   mutation_strategy = "GU"
 # )
 
 
@@ -58,6 +68,7 @@ CONFIG <- list(
   psipos = opt$psipos,
   window = opt$window,
   deltaG_threshold = opt$deltaG_threshold,
+  mutation_strategy = opt$mutation_strategy,
   
   # Input paths based on user input
   org_fold_dir    = opt$fold_dir,
@@ -149,25 +160,43 @@ identify_gc_pairs <- function(sequence, dot_bracket, psipos, window) {
   return(gc_pairs)
 }
 
-mutate_sequence <- function(sequence, gc_pairs) {
+mutate_sequence <- function(sequence, gc_pairs, strategy) {
   seq_vec <- strsplit(sequence, "")[[1]]
   mutations <- c()
   
-  for (pair in gc_pairs) {
-    if (seq_vec[pair[1]] == "G") {
-      seq_vec[pair[1]] <- "A"
+  if (strategy == "AU") {
+    # --- STRATEGY 1: Current behavior (GC -> AU) ---
+    for (pair in gc_pairs) {
+      # Mutate the first position
+      if (seq_vec[pair[1]] == "G") {
+        seq_vec[pair[1]] <- "A"
+      } else if (seq_vec[pair[1]] == "C") {
+        seq_vec[pair[1]] <- "U"
+      }
       mutations <- c(mutations, pair[1])
-    } else if (seq_vec[pair[1]] == "C") {
-      seq_vec[pair[1]] <- "U"
-      mutations <- c(mutations, pair[1])
+      
+      # Mutate the second position
+      if (seq_vec[pair[2]] == "G") {
+        seq_vec[pair[2]] <- "A"
+      } else if (seq_vec[pair[2]] == "C") {
+        seq_vec[pair[2]] <- "U"
+      }
+      mutations <- c(mutations, pair[2])
     }
-    
-    if (seq_vec[pair[2]] == "G") {
-      seq_vec[pair[2]] <- "A"
-      mutations <- c(mutations, pair[2])
-    } else if (seq_vec[pair[2]] == "C") {
-      seq_vec[pair[2]] <- "U"
-      mutations <- c(mutations, pair[2])
+  } else if (strategy == "GU") {
+    # --- STRATEGY 2: New behavior (GC -> GU) ---
+    for (pair in gc_pairs) {
+      pos1 <- pair[1]
+      pos2 <- pair[2]
+      
+      # Find which base is 'C' and mutate only that one to 'U'
+      if (seq_vec[pos1] == "C") {
+        seq_vec[pos1] <- "U"
+        mutations <- c(mutations, pos1)
+      } else if (seq_vec[pos2] == "C") {
+        seq_vec[pos2] <- "U"
+        mutations <- c(mutations, pos2)
+      }
     }
   }
   
@@ -307,46 +336,144 @@ analyze_pairings <- function(different_pairings, psipos, mutations) {
   ))
 }
 
-generate_summary_stats <- function(comprehensive_results, output_file) {
-  # Calculate summary statistics
+# generate_summary_stats <- function(comprehensive_results, output_file) {
+#   # Calculate summary statistics
+#   deltaG_categories <- table(comprehensive_results$deltaG_category)
+#   
+#   increased_deltaG_df <- comprehensive_results[comprehensive_results$deltaG_category == "increase", ]
+#   
+#   fraction_diff_less_0.05 <- sum(increased_deltaG_df$fraction_different < 0.05, na.rm=TRUE)
+#   fraction_diff_less_0.1 <- sum(increased_deltaG_df$fraction_different < 0.1, na.rm=TRUE)
+#   fraction_diff_less_0.15 <- sum(increased_deltaG_df$fraction_different < 0.15, na.rm=TRUE)
+#   
+#   no_diff_pair_in_5mer <- sum(!increased_deltaG_df$diff_pair_in_5mer, na.rm=TRUE)
+#   no_diff_pair_same_as_mutations <- sum(!increased_deltaG_df$diff_pair_same_as_mutations, na.rm=TRUE)
+#   
+#   all_conditions_met <- sum(
+#     increased_deltaG_df$fraction_different < 0.15 &
+#       !increased_deltaG_df$diff_pair_in_5mer &
+#       !increased_deltaG_df$diff_pair_same_as_mutations,
+#     na.rm = TRUE
+#   )
+#   
+#   # Create summary text
+#   summary_text <- c(
+#     "Summary Statistics:",
+#     "",
+#     "1. DeltaG categories:",
+#     paste("   Increased deltaG:", deltaG_categories["increase"]),
+#     paste("   Decreased deltaG:", deltaG_categories["decrease"]),
+#     paste("   No change in deltaG:", deltaG_categories["no change"]),
+#     "",
+#     "2. For sequences with increased deltaG:",
+#     paste("   Total sequences:", nrow(increased_deltaG_df)),
+#     paste("   a. Fraction different < 0.05:", fraction_diff_less_0.05),
+#     paste("      Fraction different < 0.10:", fraction_diff_less_0.1),
+#     paste("      Fraction different < 0.15:", fraction_diff_less_0.15),
+#     paste("   b. No differences in 5-mer region:", no_diff_pair_in_5mer),
+#     paste("   c. No differences at mutation sites:", no_diff_pair_same_as_mutations),
+#     paste("   Sequences meeting all conditions (fraction < 0.15 & b & c):", all_conditions_met)
+#   )
+#   
+#   # Write summary to file
+#   writeLines(summary_text, output_file)
+#   cat("Summary statistics have been written to", output_file, "\n")
+# }
+
+generate_summary_stats <- function(comprehensive_results, config) {
+  # --- Section 0: Run Parameters ---
+  # Pulls key parameters from the config object for a self-documenting report.
+  run_parameters_text <- c(
+    "Run Parameters:",
+    paste("  - Window Size:", config$window),
+    paste("  - Mutation Strategy:", toupper(config$mutation_strategy)),
+    "---",
+    ""
+  )
+  
+  # --- Section 1: DeltaG Categories ---
   deltaG_categories <- table(comprehensive_results$deltaG_category)
+  # Ensure all categories are present, even if count is 0
+  increase_count <- ifelse("increase" %in% names(deltaG_categories), deltaG_categories["increase"], 0)
+  decrease_count <- ifelse("decrease" %in% names(deltaG_categories), deltaG_categories["decrease"], 0)
+  no_change_count <- ifelse("no change" %in% names(deltaG_categories), deltaG_categories["no change"], 0)
   
-  increased_deltaG_df <- comprehensive_results[comprehensive_results$deltaG_category == "increase", ]
-  
-  fraction_diff_less_0.05 <- sum(increased_deltaG_df$fraction_different < 0.05, na.rm=TRUE)
-  fraction_diff_less_0.1 <- sum(increased_deltaG_df$fraction_different < 0.1, na.rm=TRUE)
-  fraction_diff_less_0.15 <- sum(increased_deltaG_df$fraction_different < 0.15, na.rm=TRUE)
-  
-  no_diff_pair_in_5mer <- sum(!increased_deltaG_df$diff_pair_in_5mer, na.rm=TRUE)
-  no_diff_pair_same_as_mutations <- sum(!increased_deltaG_df$diff_pair_same_as_mutations, na.rm=TRUE)
-  
-  all_conditions_met <- sum(
-    increased_deltaG_df$fraction_different < 0.15 &
-      !increased_deltaG_df$diff_pair_in_5mer &
-      !increased_deltaG_df$diff_pair_same_as_mutations,
-    na.rm = TRUE
+  deltaG_text <- c(
+    "1. DeltaG Categories:",
+    paste("   - Increased deltaG:", increase_count),
+    paste("   - Decreased deltaG:", decrease_count),
+    paste("   - No significant change:", no_change_count),
+    ""
   )
   
-  # Create summary text
+  # --- Section 2: Mutation Location Summary ---
+  # Filter for sequences that actually have mutations to get meaningful location stats.
+  mutated_df <- comprehensive_results %>% filter(num_mutations > 0)
+  
+  # Count occurrences of each mutation location type
+  upstream_count <- sum(mutated_df$location == "upstream", na.rm = TRUE)
+  downstream_count <- sum(mutated_df$location == "downstream", na.rm = TRUE)
+  both_count <- sum(mutated_df$location == "both", na.rm = TRUE)
+  
+  location_text <- c(
+    "2. Mutation Location Summary (for all mutated sequences):",
+    paste("   - Upstream only:", upstream_count),
+    paste("   - Downstream only:", downstream_count),
+    paste("   - Both upstream and downstream:", both_count),
+    ""
+  )
+  
+  # --- Section 3: Detailed Analysis of Increased DeltaG Sequences ---
+  increased_deltaG_df <- comprehensive_results %>% filter(deltaG_category == "increase")
+  
+  if (nrow(increased_deltaG_df) > 0) {
+    fraction_diff_less_0.05 <- sum(increased_deltaG_df$fraction_different < 0.05, na.rm = TRUE)
+    fraction_diff_less_0.1 <- sum(increased_deltaG_df$fraction_different < 0.1, na.rm = TRUE)
+    fraction_diff_less_0.15 <- sum(increased_deltaG_df$fraction_different < 0.15, na.rm = TRUE)
+    
+    no_diff_pair_in_5mer <- sum(!increased_deltaG_df$diff_pair_in_5mer, na.rm = TRUE)
+    no_diff_pair_same_as_mutations <- sum(!increased_deltaG_df$diff_pair_same_as_mutations, na.rm = TRUE)
+    
+    all_conditions_met <- sum(
+      increased_deltaG_df$fraction_different < 0.15 &
+        !increased_deltaG_df$diff_pair_in_5mer &
+        !increased_deltaG_df$diff_pair_same_as_mutations,
+      na.rm = TRUE
+    )
+    
+    increased_deltaG_text <- c(
+      "3. Detailed Analysis of 'Increased DeltaG' Sequences:",
+      paste("   Total sequences:", nrow(increased_deltaG_df)),
+      paste("   a. Structure conservation (fraction different):"),
+      paste("      - Less than 5% different:", fraction_diff_less_0.05),
+      paste("      - Less than 10% different:", fraction_diff_less_0.1),
+      paste("      - Less than 15% different:", fraction_diff_less_0.15),
+      paste("   b. No pairing status changes in 5-mer protected region:", no_diff_pair_in_5mer),
+      paste("   c. No pairing status at the mutated sites:", no_diff_pair_same_as_mutations),
+      "",
+      paste("   => Sequences meeting key conditions (fraction < 0.15 AND b AND c):", all_conditions_met)
+    )
+  } else {
+    increased_deltaG_text <- c(
+      "3. Detailed Analysis of 'Increased DeltaG' Sequences:",
+      "   No sequences found with increased deltaG."
+    )
+  }
+  
+  # --- Combine all sections into the final summary text ---
   summary_text <- c(
-    "Summary Statistics:",
+    "===== Comprehensive Mutation Analysis Summary =====",
     "",
-    "1. DeltaG categories:",
-    paste("   Increased deltaG:", deltaG_categories["increase"]),
-    paste("   Decreased deltaG:", deltaG_categories["decrease"]),
-    paste("   No change in deltaG:", deltaG_categories["no change"]),
+    run_parameters_text,
+    deltaG_text,
+    location_text,
+    increased_deltaG_text,
     "",
-    "2. For sequences with increased deltaG:",
-    paste("   Total sequences:", nrow(increased_deltaG_df)),
-    paste("   a. Fraction different < 0.05:", fraction_diff_less_0.05),
-    paste("      Fraction different < 0.10:", fraction_diff_less_0.1),
-    paste("      Fraction different < 0.15:", fraction_diff_less_0.15),
-    paste("   b. No differences in 5-mer region:", no_diff_pair_in_5mer),
-    paste("   c. No differences at mutation sites:", no_diff_pair_same_as_mutations),
-    paste("   Sequences meeting all conditions (fraction < 0.15 & b & c):", all_conditions_met)
+    "================================================="
   )
   
-  # Write summary to file
+  # Write summary to file, using the path from the config object
+  output_file <- config$output_summary
   writeLines(summary_text, output_file)
   cat("Summary statistics have been written to", output_file, "\n")
 }
@@ -357,7 +484,7 @@ process_fold_file <- function(file_path, config) {
   if (is.null(fold_data)) return(NULL)
   
   gc_pairs <- identify_gc_pairs(fold_data$seq, fold_data$dot_bracket, config$psipos, config$window)
-  mutation_result <- mutate_sequence(fold_data$seq, gc_pairs)
+  mutation_result <- mutate_sequence(fold_data$seq, gc_pairs, config$mutation_strategy)
   locations <- format_locations(gc_pairs, mutation_result$mutations, fold_data$seq)
   location <- determine_location(mutation_result$mutations, config$psipos)
   
@@ -417,9 +544,6 @@ main_workflow <- function(config) {
     left_join(fold_comparison, by = "name") %>%
     rowwise() %>%
     mutate(
-      # Ensure mutations column is a list for analyze_pairings
-      #mutations_list = list(mutations),
-      #pairing_analysis = list(analyze_pairings(different_pairings, psipos, mutations_list[[1]])),
       pairing_analysis = list(analyze_pairings(different_pairings, psipos, mutations)),
       diff_pair_in_5mer = pairing_analysis$in_5mer,
       diff_pair_same_as_mutations = pairing_analysis$same_as_mutations,
@@ -442,10 +566,10 @@ main_workflow <- function(config) {
   create_and_save_fasta(increased_deltaG_results, "mutated_seq", "name", config$output_fasta)
   
   # Generate and save the final summary statistics
-  generate_summary_stats(comprehensive_results, config$output_summary)
+  generate_summary_stats(comprehensive_results, config)
   
   cat("Workflow complete. Outputs are in:", dirname(config$output_csv), "\n")
-  return(comprehensive_results)
+  #return(comprehensive_results)
 }
 
 
