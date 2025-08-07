@@ -25,8 +25,16 @@ option_list <- list(
   make_option(c("-d", "--deltaG_threshold"), type = "double", default = 5.0,
               help = "Threshold for significant deltaG change. [default: %default]", metavar = "NUM"),
   
+  make_option(c("-m", "--mode"), type = "character", default = "destabilize",
+              help = paste("Operational mode:",
+                           "'destabilize' (GC->AU/GU) aims for a less negative (higher) delta G.",
+                           "'stabilize' (AU->GC/GU) aims for a more negative (lower) delta G.",
+                           "[default: %default]"), metavar = "MODE"),
+  
   make_option(c("-s", "--mutation_strategy"), type = "character", default = "AU",
-              help = "Mutation strategy: 'AU' (G->A and C->U) or 'GU' (C->U only). [default: %default]", metavar = "STR")
+              help = paste("Mutation strategy. For 'destabilize' mode: 'AU' or 'GU'.",
+                           "For 'stabilize' mode: 'GC' or 'GU'.",
+                           "[default: %default]"), metavar = "STRATEGY")
 )
 
 # 2. Create the parser and parse the arguments.
@@ -39,23 +47,31 @@ if (is.null(opt$fold_dir) || is.null(opt$output_dir)) {
   stop("Both --fold_dir and --output_dir must be supplied.", call. = FALSE)
 }
 
-# Validate the mutation strategy input
-valid_strategies <- c("AU", "GU")
-if (!opt$mutation_strategy %in% valid_strategies) {
-  stop(paste("Invalid --mutation_strategy. Must be one of:", paste(valid_strategies, collapse = ", ")), call. = FALSE)
+# Validate the mode
+if (!opt$mode %in% c("destabilize", "stabilize")) {
+  stop("Invalid --mode. Must be 'destabilize' or 'stabilize'.", call. = FALSE)
+}
+
+# Validate the strategy based on the mode
+if (opt$mode == "destabilize" && !opt$mutation_strategy %in% c("AU", "GU")) {
+  stop("For 'destabilize' mode, --mutation_strategy must be 'AU' or 'GU'.", call. = FALSE)
+}
+if (opt$mode == "stabilize" && !opt$mutation_strategy %in% c("GC", "GU")) {
+  stop("For 'stabilize' mode, --mutation_strategy must be 'GC' or 'GU'.", call. = FALSE)
 }
 
 # ---- Interactive Debugging Setup ----
 # If running in RStudio, manually define the 'opt' list with your test arguments.
-cat("Running in interactive mode. Using manual 'opt' list for debugging.\n")
-
+# cat("Running in interactive mode. Using manual 'opt' list for debugging.\n")
+# 
 # opt <- list(
 #   fold_dir = "/scratch/users/rodell/RNAfold_psipos",
-#   output_dir = "/scratch/users/rodell/deltaG/alter_deltaG/increase_GUAU/GUwindow7",
+#   output_dir = "/scratch/users/rodell/deltaG/alter_deltaG/both/stabilizeGC_window7",
 #   psipos = 59,
 #   window = 7, # This was specified in your command
 #   deltaG_threshold = 5.0,
-#   mutation_strategy = "GU"
+#   mode = "stabilize",
+#   mutation_strategy = "GC"
 # )
 
 
@@ -68,6 +84,7 @@ CONFIG <- list(
   psipos = opt$psipos,
   window = opt$window,
   deltaG_threshold = opt$deltaG_threshold,
+  mode = opt$mode,
   mutation_strategy = opt$mutation_strategy,
   
   # Input paths based on user input
@@ -160,42 +177,77 @@ identify_gc_pairs <- function(sequence, dot_bracket, psipos, window) {
   return(gc_pairs)
 }
 
-mutate_sequence <- function(sequence, gc_pairs, strategy) {
+identify_au_pairs <- function(sequence, dot_bracket, psipos, window) {
+  seq_length <- nchar(sequence)
+  start <- max(1, psipos - window)
+  end <- min(seq_length, psipos + window)
+  
+  au_pairs <- list()
+  stack <- list()
+  protected_range <- (psipos - 2):(psipos + 2)
+  
+  for (i in 1:seq_length) {
+    if (substr(dot_bracket, i, i) == "(") {
+      stack <- c(stack, i)
+    } else if (substr(dot_bracket, i, i) == ")") {
+      if (length(stack) > 0) {
+        open <- stack[[length(stack)]]
+        stack <- stack[-length(stack)]
+        
+        if ((open >= start && open <= end) || (i >= start && i <= end)) {
+          base1 <- substr(sequence, open, open)
+          base2 <- substr(sequence, i, i)
+          if ((base1 == "A" && base2 == "U") || (base1 == "U" && base2 == "A")) {
+            if (!(open %in% protected_range) && !(i %in% protected_range)) {
+              au_pairs[[length(au_pairs) + 1]] <- c(open, i)
+            }
+          }
+        }
+      }
+    }
+  }
+  return(au_pairs)
+}
+
+mutate_sequence <- function(sequence, pairs_to_mutate, mode, strategy) {
   seq_vec <- strsplit(sequence, "")[[1]]
   mutations <- c()
   
-  if (strategy == "AU") {
-    # --- STRATEGY 1: Current behavior (GC -> AU) ---
-    for (pair in gc_pairs) {
-      # Mutate the first position
-      if (seq_vec[pair[1]] == "G") {
-        seq_vec[pair[1]] <- "A"
-      } else if (seq_vec[pair[1]] == "C") {
-        seq_vec[pair[1]] <- "U"
+  # Logic Gate for Mode
+  if (mode == "destabilize") {
+    # This is the existing logic for GC -> AU/GU
+    if (strategy == "AU") {
+      for (pair in pairs_to_mutate) {
+        if (seq_vec[pair[1]] == "G") { seq_vec[pair[1]] <- "A" } else { seq_vec[pair[1]] <- "U" }
+        mutations <- c(mutations, pair[1])
+        if (seq_vec[pair[2]] == "G") { seq_vec[pair[2]] <- "A" } else { seq_vec[pair[2]] <- "U" }
+        mutations <- c(mutations, pair[2])
       }
-      mutations <- c(mutations, pair[1])
-      
-      # Mutate the second position
-      if (seq_vec[pair[2]] == "G") {
-        seq_vec[pair[2]] <- "A"
-      } else if (seq_vec[pair[2]] == "C") {
-        seq_vec[pair[2]] <- "U"
+    } else if (strategy == "GU") {
+      for (pair in pairs_to_mutate) {
+        if (seq_vec[pair[1]] == "C") {
+          seq_vec[pair[1]] <- "U"; mutations <- c(mutations, pair[1])
+        } else if (seq_vec[pair[2]] == "C") {
+          seq_vec[pair[2]] <- "U"; mutations <- c(mutations, pair[2])
+        }
       }
-      mutations <- c(mutations, pair[2])
     }
-  } else if (strategy == "GU") {
-    # --- STRATEGY 2: New behavior (GC -> GU) ---
-    for (pair in gc_pairs) {
-      pos1 <- pair[1]
-      pos2 <- pair[2]
-      
-      # Find which base is 'C' and mutate only that one to 'U'
-      if (seq_vec[pos1] == "C") {
-        seq_vec[pos1] <- "U"
-        mutations <- c(mutations, pos1)
-      } else if (seq_vec[pos2] == "C") {
-        seq_vec[pos2] <- "U"
-        mutations <- c(mutations, pos2)
+  } else if (mode == "stabilize") {
+    # This is the new logic for AU -> GC/GU
+    if (strategy == "GC") {
+      for (pair in pairs_to_mutate) {
+        if (seq_vec[pair[1]] == "A") { seq_vec[pair[1]] <- "G" } else { seq_vec[pair[1]] <- "C" }
+        mutations <- c(mutations, pair[1])
+        if (seq_vec[pair[2]] == "A") { seq_vec[pair[2]] <- "G" } else { seq_vec[pair[2]] <- "C" }
+        mutations <- c(mutations, pair[2])
+      }
+    } else if (strategy == "GU") {
+      for (pair in pairs_to_mutate) {
+        if (seq_vec[pair[1]] == "A") {
+          seq_vec[pair[1]] <- "G"; mutations <- c(mutations, pair[1])
+        } else if (seq_vec[pair[2]] == "A") {
+          seq_vec[pair[2]] <- "G"; mutations <- c(mutations, pair[2])
+        }
       }
     }
   }
@@ -336,81 +388,35 @@ analyze_pairings <- function(different_pairings, psipos, mutations) {
   ))
 }
 
-# generate_summary_stats <- function(comprehensive_results, output_file) {
-#   # Calculate summary statistics
-#   deltaG_categories <- table(comprehensive_results$deltaG_category)
-#   
-#   increased_deltaG_df <- comprehensive_results[comprehensive_results$deltaG_category == "increase", ]
-#   
-#   fraction_diff_less_0.05 <- sum(increased_deltaG_df$fraction_different < 0.05, na.rm=TRUE)
-#   fraction_diff_less_0.1 <- sum(increased_deltaG_df$fraction_different < 0.1, na.rm=TRUE)
-#   fraction_diff_less_0.15 <- sum(increased_deltaG_df$fraction_different < 0.15, na.rm=TRUE)
-#   
-#   no_diff_pair_in_5mer <- sum(!increased_deltaG_df$diff_pair_in_5mer, na.rm=TRUE)
-#   no_diff_pair_same_as_mutations <- sum(!increased_deltaG_df$diff_pair_same_as_mutations, na.rm=TRUE)
-#   
-#   all_conditions_met <- sum(
-#     increased_deltaG_df$fraction_different < 0.15 &
-#       !increased_deltaG_df$diff_pair_in_5mer &
-#       !increased_deltaG_df$diff_pair_same_as_mutations,
-#     na.rm = TRUE
-#   )
-#   
-#   # Create summary text
-#   summary_text <- c(
-#     "Summary Statistics:",
-#     "",
-#     "1. DeltaG categories:",
-#     paste("   Increased deltaG:", deltaG_categories["increase"]),
-#     paste("   Decreased deltaG:", deltaG_categories["decrease"]),
-#     paste("   No change in deltaG:", deltaG_categories["no change"]),
-#     "",
-#     "2. For sequences with increased deltaG:",
-#     paste("   Total sequences:", nrow(increased_deltaG_df)),
-#     paste("   a. Fraction different < 0.05:", fraction_diff_less_0.05),
-#     paste("      Fraction different < 0.10:", fraction_diff_less_0.1),
-#     paste("      Fraction different < 0.15:", fraction_diff_less_0.15),
-#     paste("   b. No differences in 5-mer region:", no_diff_pair_in_5mer),
-#     paste("   c. No differences at mutation sites:", no_diff_pair_same_as_mutations),
-#     paste("   Sequences meeting all conditions (fraction < 0.15 & b & c):", all_conditions_met)
-#   )
-#   
-#   # Write summary to file
-#   writeLines(summary_text, output_file)
-#   cat("Summary statistics have been written to", output_file, "\n")
-# }
-
 generate_summary_stats <- function(comprehensive_results, config) {
   # --- Section 0: Run Parameters ---
-  # Pulls key parameters from the config object for a self-documenting report.
   run_parameters_text <- c(
+    "===== Comprehensive Mutation Analysis Summary =====",
+    "",
     "Run Parameters:",
-    paste("  - Window Size:", config$window),
+    paste("  - Goal (Mode):", toupper(config$mode)),
     paste("  - Mutation Strategy:", toupper(config$mutation_strategy)),
+    paste("  - Window Size:", config$window),
     "---",
     ""
   )
   
-  # --- Section 1: DeltaG Categories ---
+  # --- Section 1: DeltaG Categories (with clear labels) ---
   deltaG_categories <- table(comprehensive_results$deltaG_category)
-  # Ensure all categories are present, even if count is 0
   increase_count <- ifelse("increase" %in% names(deltaG_categories), deltaG_categories["increase"], 0)
   decrease_count <- ifelse("decrease" %in% names(deltaG_categories), deltaG_categories["decrease"], 0)
   no_change_count <- ifelse("no change" %in% names(deltaG_categories), deltaG_categories["no change"], 0)
   
   deltaG_text <- c(
-    "1. DeltaG Categories:",
-    paste("   - Increased deltaG:", increase_count),
-    paste("   - Decreased deltaG:", decrease_count),
+    "1. Overall Delta G Change Distribution:",
+    paste("   - Destabilized (delta G became less negative/higher):", increase_count),
+    paste("   - Stabilized (delta G became more negative/lower):", decrease_count),
     paste("   - No significant change:", no_change_count),
     ""
   )
   
   # --- Section 2: Mutation Location Summary ---
-  # Filter for sequences that actually have mutations to get meaningful location stats.
   mutated_df <- comprehensive_results %>% filter(num_mutations > 0)
-  
-  # Count occurrences of each mutation location type
   upstream_count <- sum(mutated_df$location == "upstream", na.rm = TRUE)
   downstream_count <- sum(mutated_df$location == "downstream", na.rm = TRUE)
   both_count <- sum(mutated_df$location == "both", na.rm = TRUE)
@@ -423,69 +429,82 @@ generate_summary_stats <- function(comprehensive_results, config) {
     ""
   )
   
-  # --- Section 3: Detailed Analysis of Increased DeltaG Sequences ---
-  increased_deltaG_df <- comprehensive_results %>% filter(deltaG_category == "increase")
+  # --- Section 3: Detailed Analysis of Successful Sequences ---
+  success_df <- data.frame()
+  header_text <- ""
   
-  if (nrow(increased_deltaG_df) > 0) {
-    fraction_diff_less_0.05 <- sum(increased_deltaG_df$fraction_different < 0.05, na.rm = TRUE)
-    fraction_diff_less_0.1 <- sum(increased_deltaG_df$fraction_different < 0.1, na.rm = TRUE)
-    fraction_diff_less_0.15 <- sum(increased_deltaG_df$fraction_different < 0.15, na.rm = TRUE)
-    
-    no_diff_pair_in_5mer <- sum(!increased_deltaG_df$diff_pair_in_5mer, na.rm = TRUE)
-    no_diff_pair_same_as_mutations <- sum(!increased_deltaG_df$diff_pair_same_as_mutations, na.rm = TRUE)
-    
+  if (config$mode == "destabilize") {
+    success_df <- comprehensive_results %>% filter(deltaG_category == "increase")
+    header_text <- "3. Detailed Analysis of Successfully DESTABILIZED Sequences (delta G increased):"
+  } else { # mode == "stabilize"
+    success_df <- comprehensive_results %>% filter(deltaG_category == "decrease")
+    header_text <- "3. Detailed Analysis of Successfully STABILIZED Sequences (delta G decreased):"
+  }
+  
+  if (nrow(success_df) > 0) {
+    fraction_diff_less_0.05 <- sum(success_df$fraction_different < 0.05, na.rm = TRUE)
+    fraction_diff_less_0.1 <- sum(success_df$fraction_different < 0.1, na.rm = TRUE)
+    fraction_diff_less_0.15 <- sum(success_df$fraction_different < 0.15, na.rm = TRUE)
+    no_diff_pair_in_5mer <- sum(!success_df$diff_pair_in_5mer, na.rm = TRUE)
+    no_diff_pair_same_as_mutations <- sum(!success_df$diff_pair_same_as_mutations, na.rm = TRUE)
     all_conditions_met <- sum(
-      increased_deltaG_df$fraction_different < 0.15 &
-        !increased_deltaG_df$diff_pair_in_5mer &
-        !increased_deltaG_df$diff_pair_same_as_mutations,
+      success_df$fraction_different < 0.15 &
+        !success_df$diff_pair_in_5mer &
+        !success_df$diff_pair_same_as_mutations,
       na.rm = TRUE
     )
     
-    increased_deltaG_text <- c(
-      "3. Detailed Analysis of 'Increased DeltaG' Sequences:",
-      paste("   Total sequences:", nrow(increased_deltaG_df)),
+    success_analysis_text <- c(
+      header_text,
+      paste("   Total successful sequences:", nrow(success_df)),
       paste("   a. Structure conservation (fraction different):"),
       paste("      - Less than 5% different:", fraction_diff_less_0.05),
       paste("      - Less than 10% different:", fraction_diff_less_0.1),
       paste("      - Less than 15% different:", fraction_diff_less_0.15),
-      paste("   b. No pairing status changes in 5-mer protected region:", no_diff_pair_in_5mer),
-      paste("   c. No pairing status at the mutated sites:", no_diff_pair_same_as_mutations),
+      paste("   b. No structural changes in 5-mer protected region:", no_diff_pair_in_5mer),
+      paste("   c. No structural changes at the exact mutation sites:", no_diff_pair_same_as_mutations),
       "",
       paste("   => Sequences meeting key conditions (fraction < 0.15 AND b AND c):", all_conditions_met)
     )
   } else {
-    increased_deltaG_text <- c(
-      "3. Detailed Analysis of 'Increased DeltaG' Sequences:",
-      "   No sequences found with increased deltaG."
+    success_analysis_text <- c(
+      header_text,
+      paste("   No sequences were successfully", toupper(config$mode), "d according to the threshold.")
     )
   }
   
-  # --- Combine all sections into the final summary text ---
+  # --- Combine and Write ---
   summary_text <- c(
-    "===== Comprehensive Mutation Analysis Summary =====",
-    "",
     run_parameters_text,
     deltaG_text,
     location_text,
-    increased_deltaG_text,
+    success_analysis_text,
     "",
     "================================================="
   )
   
-  # Write summary to file, using the path from the config object
   output_file <- config$output_summary
   writeLines(summary_text, output_file)
   cat("Summary statistics have been written to", output_file, "\n")
 }
 
 # ---- Main Workflow ----
+
 process_fold_file <- function(file_path, config) {
   fold_data <- read_fold_file(file_path)
   if (is.null(fold_data)) return(NULL)
   
-  gc_pairs <- identify_gc_pairs(fold_data$seq, fold_data$dot_bracket, config$psipos, config$window)
-  mutation_result <- mutate_sequence(fold_data$seq, gc_pairs, config$mutation_strategy)
-  locations <- format_locations(gc_pairs, mutation_result$mutations, fold_data$seq)
+  # Logic Gate: Choose which pairs to identify based on the mode
+  if (config$mode == "destabilize") {
+    pairs_to_mutate <- identify_gc_pairs(fold_data$seq, fold_data$dot_bracket, config$psipos, config$window)
+  } else {# mode == "stabilize"
+    pairs_to_mutate <- identify_au_pairs(fold_data$seq, fold_data$dot_bracket, config$psipos, config$window)
+  }
+  
+  # Pass all necessary parameters to the updated mutate_sequence function
+  mutation_result <- mutate_sequence(fold_data$seq, pairs_to_mutate, config$mode, config$mutation_strategy)
+  
+  locations <- format_locations(pairs_to_mutate, mutation_result$mutations, fold_data$seq)
   location <- determine_location(mutation_result$mutations, config$psipos)
   
   data.frame(
@@ -562,8 +581,14 @@ main_workflow <- function(config) {
   write.csv(comprehensive_results, config$output_csv, row.names = FALSE)
   
   # Save a final FASTA file of sequences that showed increased deltaG
-  increased_deltaG_results <- filter(comprehensive_results, deltaG_category == "increase")
-  create_and_save_fasta(increased_deltaG_results, "mutated_seq", "name", config$output_fasta)
+  # increased_deltaG_results <- filter(comprehensive_results, deltaG_category == "increase")
+  # create_and_save_fasta(increased_deltaG_results, "mutated_seq", "name", config$output_fasta)
+  if (config$mode == "destabilize") {
+    successful_results <- filter(comprehensive_results, deltaG_category == "increase")
+  } else { # mode == "stabilize"
+    successful_results <- filter(comprehensive_results, deltaG_category == "decrease")
+  }
+  create_and_save_fasta(successful_results, "mutated_seq", "name", config$output_fasta)
   
   # Generate and save the final summary statistics
   generate_summary_stats(comprehensive_results, config)
