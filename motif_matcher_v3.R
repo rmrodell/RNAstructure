@@ -94,48 +94,6 @@ is_valid_unpaired_region <- function(chars, start, end) {
   all(chars[start:end] == ".")
 }
 
-# generate_result_list <- function(i, unpaired1_len, paired1_len, unpaired2_len, paired2_len, include_unpaired1, include_paired2) {
-#   result <- list(
-#     paired1_start = i + if(include_unpaired1) unpaired1_len else 0,
-#     paired1_end = i + if(include_unpaired1) unpaired1_len else 0 + paired1_len - 1,
-#     paired1_length = paired1_len,
-#     unpaired2_start = i + if(include_unpaired1) unpaired1_len else 0 + paired1_len,
-#     unpaired2_end = i + if(include_unpaired1) unpaired1_len else 0 + paired1_len + unpaired2_len - 1,
-#     unpaired2_length = unpaired2_len
-#   )
-  
-#   if (include_unpaired1) {
-#     result <- c(list(
-#       unpaired1_start = i,
-#       unpaired1_end = i + unpaired1_len - 1,
-#       unpaired1_length = unpaired1_len
-#     ), result)
-#   } else {
-#     result <- c(list(
-#       unpaired1_start = NA,
-#       unpaired1_end = NA,
-#       unpaired1_length = NA
-#     ), result)
-#   }
-  
-#   if (include_paired2) {
-#     result <- c(result, list(
-#       paired2_start = i + if(include_unpaired1) unpaired1_len else 0 + paired1_len + unpaired2_len,
-#       paired2_end = i + if(include_unpaired1) unpaired1_len else 0 + paired1_len + unpaired2_len + paired2_len - 1,
-#       paired2_length = paired2_len
-#     ))
-#   } else {
-#     result <- c(result, list(
-#       paired2_start = NA,
-#       paired2_end = NA,
-#       paired2_length = NA
-#     ))
-#   }
-  
-#   return(result)
-# }
-
-# CORRECTED function
 generate_result_list <- function(i, unpaired1_len, paired1_len, unpaired2_len, paired2_len, include_unpaired1, include_paired2) {
   # Calculate the length of the prefix before each region
   prefix_len1 <- if(include_unpaired1) unpaired1_len else 0
@@ -212,14 +170,6 @@ has_motif_at <- function(dot_bracket, i, min_unpaired1, max_unpaired1, min_paire
         unpaired2_end <- unpaired2_start + unpaired2_len - 1
         if (unpaired2_end > n) next
         if (!is_valid_unpaired_region(chars, unpaired2_start, unpaired2_end)) next
-
-        # for (paired2_len in paired2_range) {
-        #   if (include_paired2) {
-        #     paired2_start <- unpaired2_end + 1
-        #     paired2_end <- paired2_start + paired2_len - 1
-        #     if (paired2_end > n) next
-        #     if (!is_valid_paired_region(chars, paired2_start, paired2_end)) next
-        #   }
 
         for (paired2_len in paired2_range) {
           if (include_paired2 && paired2_len > 0) { # Check for length > 0
