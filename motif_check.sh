@@ -3,7 +3,7 @@
 ml biology viennarna
 ml R
 
-out_dir_bestf1="/scratch/users/rodell/motifmatcher/20250802/analysis/bestf1"
+out_dir_bestf1="/scratch/users/rodell/motifmatcher/20250802/analysis/test"
 out_dir_mostmut="/scratch/users/rodell/motifmatcher/20250802/analysis/mostmut"
 
 mkdir -p $out_dir_bestf1
