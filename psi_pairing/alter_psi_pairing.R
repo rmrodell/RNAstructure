@@ -34,7 +34,7 @@ cat("Running in interactive mode. Using manual 'opt' list for debugging.\n")
 
 opt <- list(
   fold_dir = "/scratch/users/rodell/RNAfold_psipos",
-  output_dir = "/scratch/users/rodell/psi_pairing/breakpair",
+  output_dir = "/scratch/users/rodell/psi_pairing/breakpair/repulsive59",
   target_pos = 59
 )
 
@@ -138,24 +138,45 @@ find_pairing_partner <- function(dot_bracket, target_pos) {
 }
 
 # Scenario 1: Make a paired site unpaired.
-mutate_to_break_pair <- function(sequence, partner_pos) {
+# mutate_to_break_pair <- function(sequence, partner_pos, target_base) {
+#   seq_vec <- strsplit(sequence, "")[[1]]
+#   original_base <- seq_vec[partner_pos]
+#   
+#   # # Mutation strategy: purine -> purine, pyrimidine -> pyrimidine
+#   # mutated_base <- case_when(
+#   #   original_base == "A" ~ "G",
+#   #   original_base == "G" ~ "A",
+#   #   original_base == "C" ~ "U",
+#   #   original_base == "U" ~ "C",
+#   #   TRUE ~ NA_character_ # Handle unexpected characters like 'N'
+#   # )
+#   
+#   # New strategy: The mutated base is now a copy of the target base.
+#   mutated_base <- target_base 
+#   
+#   # If the original base was not A, U, G, or C, we can't mutate it.
+#   if (is.na(mutated_base)) {
+#     warning(sprintf("Cannot mutate unrecognized base '%s' at position %d.", original_base, partner_pos))
+#     return(NULL) # Return NULL to indicate failure
+#   }
+#   
+#   seq_vec[partner_pos] <- mutated_base
+#   
+#   mutated_seq <- paste(seq_vec, collapse = "")
+#   mutation_info <- sprintf("%s%d%s", original_base, partner_pos, mutated_base)
+#   
+#   return(list(
+#     sequence = mutated_seq,
+#     info_string = mutation_info
+#   ))
+# }
+
+mutate_to_break_pair <- function(sequence, partner_pos, target_base) {
   seq_vec <- strsplit(sequence, "")[[1]]
   original_base <- seq_vec[partner_pos]
   
-  # Mutation strategy: purine -> purine, pyrimidine -> pyrimidine
-  mutated_base <- case_when(
-    original_base == "A" ~ "G",
-    original_base == "G" ~ "A",
-    original_base == "C" ~ "U",
-    original_base == "U" ~ "C",
-    TRUE ~ NA_character_ # Handle unexpected characters like 'N'
-  )
-  
-  # If the original base was not A, U, G, or C, we can't mutate it.
-  if (is.na(mutated_base)) {
-    warning(sprintf("Cannot mutate unrecognized base '%s' at position %d.", original_base, partner_pos))
-    return(NULL) # Return NULL to indicate failure
-  }
+  # New strategy: The mutated base is now a copy of the target base.
+  mutated_base <- target_base
   
   seq_vec[partner_pos] <- mutated_base
   
@@ -238,7 +259,13 @@ main_workflow <- function(config) {
         return(NULL)
       }
       
-      mutation_result <- mutate_to_break_pair(org_data$seq, partner_pos)
+      # 1. Get the base at the target position
+      target_base <- substr(org_data$seq, config$target_pos, config$target_pos)
+      
+      # 2. Pass it to the updated function
+      mutation_result <- mutate_to_break_pair(org_data$seq, partner_pos, target_base)
+      # 
+      # mutation_result <- mutate_to_break_pair(org_data$seq, partner_pos)
       strategy <- "break_pair"
       
       
