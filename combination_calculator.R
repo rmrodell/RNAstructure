@@ -67,3 +67,141 @@ generate_parameter_combinations <- function() {
 combinations <- generate_parameter_combinations()
 
 nrow(combinations)
+
+#set 1
+PARAMETER_RANGES <- list(
+  input_position = 59, 
+  offset_min = 0:0,
+  offset_max = 1:2,
+  include_unpaired1 = c(FALSE, TRUE),
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
+  unpaired2_max = 4:4,
+  include_paired2 = c(FALSE, TRUE)
+)
+
+UNPAIRED1_RANGES <- list(
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
+)
+
+PAIRED2_RANGES <- list(
+  paired2_min = 1:2,
+  paired2_max = 4:9
+)
+
+#set2
+PARAMETER_RANGES <- list(
+  input_position = 59, 
+  offset_min = 0:0,
+  offset_max = 1:2,
+  include_unpaired1 = c(FALSE, TRUE),
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
+  unpaired2_max = 5:5,
+  include_paired2 = c(FALSE, TRUE)
+)
+
+UNPAIRED1_RANGES <- list(
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
+)
+
+PAIRED2_RANGES <- list(
+  paired2_min = 1:2,
+  paired2_max = 4:9
+)
+
+#set3
+PARAMETER_RANGES <- list(
+  input_position = 59, 
+  offset_min = 0:0,
+  offset_max = 1:2,
+  include_unpaired1 = c(FALSE, TRUE),
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
+  unpaired2_max = 6:6,
+  include_paired2 = c(FALSE, TRUE)
+)
+
+UNPAIRED1_RANGES <- list(
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
+)
+
+PAIRED2_RANGES <- list(
+  paired2_min = 1:2,
+  paired2_max = 4:9
+)
+
+#set4
+PARAMETER_RANGES <- list(
+  input_position = 59, 
+  offset_min = 0:0,
+  offset_max = 1:2,
+  include_unpaired1 = c(FALSE, TRUE),
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
+  unpaired2_max = 7:7,
+  include_paired2 = c(FALSE, TRUE)
+)
+
+UNPAIRED1_RANGES <- list(
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
+)
+
+PAIRED2_RANGES <- list(
+  paired2_min = 1:2,
+  paired2_max = 4:9
+)
+
+#set5
+PARAMETER_RANGES <- list(
+  input_position = 59, 
+  offset_min = 0:0,
+  offset_max = 1:2,
+  include_unpaired1 = c(FALSE, TRUE),
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
+  unpaired2_max = 8:8,
+  include_paired2 = c(FALSE, TRUE)
+)
+
+UNPAIRED1_RANGES <- list(
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
+)
+
+PAIRED2_RANGES <- list(
+  paired2_min = 1:2,
+  paired2_max = 4:9
+)
+
+#set6
+PARAMETER_RANGES <- list(
+  input_position = 59, 
+  offset_min = 0:0,
+  offset_max = 1:2,
+  include_unpaired1 = c(FALSE, TRUE),
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
+  unpaired2_max = 9:9,
+  include_paired2 = c(FALSE, TRUE)
+)
+
+UNPAIRED1_RANGES <- list(
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
+)
+
+PAIRED2_RANGES <- list(
+  paired2_min = 1:2,
+  paired2_max = 4:9
+)
