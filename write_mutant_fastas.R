@@ -26,6 +26,10 @@ if ("paired2_disruption" %in% names(data) && any(!is.na(data$paired2_disruption)
   mutant_types <- c(mutant_types, "paired2_disruption", "paired2_compensatory")
 }
 
+if ("combined_disruption" %in% names(data) && any(!is.na(data$combined_disruption))) {
+  mutant_types <- c(mutant_types, "combined_disruption", "combined_compensatory")
+}
+
 # --- Write one FASTA file per mutant type ---
 for (type in mutant_types) {
   fasta_path <- file.path(output_dir, paste0(type, ".fa"))
