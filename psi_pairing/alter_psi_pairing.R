@@ -30,13 +30,13 @@ if (is.null(opt$fold_dir) || is.null(opt$output_dir) || is.null(opt$target_pos))
 
 # ---- Interactive Debugging Setup ----
 # If running in RStudio, manually define the 'opt' list with your test arguments.
-cat("Running in interactive mode. Using manual 'opt' list for debugging.\n")
-
-opt <- list(
-  fold_dir = "/scratch/users/rodell/RNAfold_psipos",
-  output_dir = "/scratch/users/rodell/psi_pairing/breakpair/repulsive59",
-  target_pos = 59
-)
+# cat("Running in interactive mode. Using manual 'opt' list for debugging.\n")
+# 
+# opt <- list(
+#   fold_dir = "/scratch/users/rodell/RNAfold_psipos",
+#   output_dir = "/scratch/users/rodell/psi_pairing/makeandbreakpair/test1",
+#   target_pos = 59
+# )
 
 
 # ---- Dynamic Configuration ----
@@ -138,44 +138,10 @@ find_pairing_partner <- function(dot_bracket, target_pos) {
 }
 
 # Scenario 1: Make a paired site unpaired.
-# mutate_to_break_pair <- function(sequence, partner_pos, target_base) {
-#   seq_vec <- strsplit(sequence, "")[[1]]
-#   original_base <- seq_vec[partner_pos]
-#   
-#   # # Mutation strategy: purine -> purine, pyrimidine -> pyrimidine
-#   # mutated_base <- case_when(
-#   #   original_base == "A" ~ "G",
-#   #   original_base == "G" ~ "A",
-#   #   original_base == "C" ~ "U",
-#   #   original_base == "U" ~ "C",
-#   #   TRUE ~ NA_character_ # Handle unexpected characters like 'N'
-#   # )
-#   
-#   # New strategy: The mutated base is now a copy of the target base.
-#   mutated_base <- target_base 
-#   
-#   # If the original base was not A, U, G, or C, we can't mutate it.
-#   if (is.na(mutated_base)) {
-#     warning(sprintf("Cannot mutate unrecognized base '%s' at position %d.", original_base, partner_pos))
-#     return(NULL) # Return NULL to indicate failure
-#   }
-#   
-#   seq_vec[partner_pos] <- mutated_base
-#   
-#   mutated_seq <- paste(seq_vec, collapse = "")
-#   mutation_info <- sprintf("%s%d%s", original_base, partner_pos, mutated_base)
-#   
-#   return(list(
-#     sequence = mutated_seq,
-#     info_string = mutation_info
-#   ))
-# }
-
 mutate_to_break_pair <- function(sequence, partner_pos, target_base) {
   seq_vec <- strsplit(sequence, "")[[1]]
   original_base <- seq_vec[partner_pos]
   
-  # New strategy: The mutated base is now a copy of the target base.
   mutated_base <- target_base
   
   seq_vec[partner_pos] <- mutated_base
@@ -185,27 +151,163 @@ mutate_to_break_pair <- function(sequence, partner_pos, target_base) {
   
   return(list(
     sequence = mutated_seq,
-    info_string = mutation_info
+    info_string = mutation_info,
+    strategy_used = "break_pair" # Add this line
   ))
 }
 
 # Scenario 2: Make an unpaired site paired. This is the hardest part.
-# This function would contain the "zip it up" logic.
-find_and_mutate_to_create_pair <- function(sequence, dot_bracket, target_pos) {
-  # Strategy:
-  # 1. Identify the base at target_pos (e.g., 'G').
-  # 2. Find the desired complementary base (e.g., 'C').
-  # 3. Search for a suitable partner position. A good heuristic is to look for the
-  #    nearest existing stem and try to extend it.
-  # 4. For example, if target_pos is in a loop, find the closest base of the
-  #    enclosing stem. Let's say the stem is from i to j. If target_pos is k,
-  #    and k is near i, a good candidate partner is near j.
-  # 5. Let's say we identify position `p` as the best candidate partner.
-  # 6. Mutate the base at `p` to the complementary base (e.g., 'C').
-  # 7. **Crucial:** To "zip it up" and make this new pair stable, you might also
-  #    need to introduce a supporting mutation. For example, mutate `p-1` to
-  #    be complementary to `target_pos+1`. This creates a stable 2-bp stem.
-  # Returns: list(mutated_seq, mutation_info) or NULL if no good candidate is found.
+get_complement <- function(base) {
+  case_when(
+    base == "A" ~ "U",
+    base == "U" ~ "A",
+    base == "G" ~ "C",
+    base == "C" ~ "G",
+    TRUE ~ NA_character_
+  )
+}
+
+# Strategy 1: Zip
+#' Tries to pair a target by extending the nearest stem by 3 bp.
+attempt_extend_stem <- function(org_data, config) {
+  seq_len <- nchar(org_data$seq)
+  target_pos <- config$target_pos
+  SEARCH_WINDOW <- 5 # How far to look for a paired region.
+  MAX_GAP_SIZE <- 3  # Max unpaired bases between stem and target.
+  
+  # Search for the nearest paired base
+  for (i in 1:SEARCH_WINDOW) {
+    positions_to_check <- c(target_pos - i, target_pos + i)
+    
+    for (nearest_paired_base in positions_to_check) {
+      if (nearest_paired_base < 1 || nearest_paired_base > seq_len) next
+      
+      if (substr(org_data$dot_bracket, nearest_paired_base, nearest_paired_base) != ".") {
+        
+        partner_of_nearest <- find_pairing_partner(org_data$dot_bracket, nearest_paired_base)
+        if(is.na(partner_of_nearest)) next
+        
+        # --- NEW: Generalize for gaps ---
+        gap_size <- abs(target_pos - nearest_paired_base) - 1
+        if (gap_size < 0 || gap_size > MAX_GAP_SIZE) next
+        
+        # Determine the full range of positions to pair
+        if (target_pos > nearest_paired_base) { # Upstream stem: ...))...t...
+          # Positions on the target side of the new helix
+          positions_to_pair_1 <- (nearest_paired_base + 1):target_pos
+          # Positions on the opposite strand that will be mutated
+          positions_to_pair_2 <- rev((partner_of_nearest - gap_size - 1):(partner_of_nearest - 1))
+        } else { # Downstream stem: ...t...((...
+          positions_to_pair_1 <- rev((target_pos):(nearest_paired_base - 1))
+          positions_to_pair_2 <- (partner_of_nearest + 1):(partner_of_nearest + 1 + gap_size)
+        }
+        
+        # --- Sanity Checks ---
+        all_new_positions <- c(positions_to_pair_1, positions_to_pair_2)
+        if (any(all_new_positions < 1) || any(all_new_positions > seq_len)) next
+        
+        is_unpaired <- sapply(all_new_positions, function(p) substr(org_data$dot_bracket, p, p) == ".")
+        if (!all(is_unpaired)) next
+        
+        # --- If we get here, the extension is valid. Perform all mutations. ---
+        seq_vec <- strsplit(org_data$seq, "")[[1]]
+        mutation_infos <- list()
+        
+        for (j in 1:length(positions_to_pair_1)) {
+          pos1 <- positions_to_pair_1[j]
+          pos2 <- positions_to_pair_2[j]
+          
+          base_to_get_comp_from <- seq_vec[pos1]
+          original_base_to_mutate <- seq_vec[pos2]
+          
+          complement <- get_complement(base_to_get_comp_from)
+          if(is.na(complement)) next # Skip if we have an 'N' or other weird base
+          
+          # Apply mutation
+          seq_vec[pos2] <- complement
+          
+          # Record info
+          mutation_infos[[j]] <- sprintf("%s%d%s", original_base_to_mutate, pos2, complement)
+        }
+        
+        # Return the result
+        return(list(
+          sequence = paste(seq_vec, collapse = ""),
+          info_string = paste(unlist(mutation_infos), collapse = ", "),
+          strategy_used = "extend_stem"
+        ))
+      }
+    }
+  }
+  
+  # If the loop finishes without finding a valid extension
+  return(NULL)
+}
+
+# Strategy 2: Seed
+# Tries to pair a target by creating a new hairpin.
+# Forms a 2-bp stem creating a stable tetraloop ((..)).
+attempt_seed_hairpin <- function(org_data, config) {
+  seq_len <- nchar(org_data$seq)
+  target_pos <- config$target_pos
+  
+  # Define positions for a ((..)) tetraloop relative to target_pos
+  # target_pos will be the first '(', target_pos+1 the second '('
+  # target_pos+3 the first ')', target_pos+4 the second ')'
+  pos_to_mutate_1 <- target_pos + 4 # Partner for target_pos
+  pos_to_mutate_2 <- target_pos + 3 # Partner for target_pos + 1
+  
+  # --- Sanity Checks ---
+  # 1. Ensure all positions are within the sequence bounds.
+  if (pos_to_mutate_1 > seq_len) return(NULL)
+  
+  # 2. Ensure all involved positions are currently unpaired.
+  required_unpaired <- c(target_pos, target_pos + 1, target_pos + 2, target_pos + 3, target_pos + 4)
+  for (pos in required_unpaired) {
+    if (substr(org_data$dot_bracket, pos, pos) != ".") return(NULL)
+  }
+  
+  # --- Perform Mutation ---
+  seq_vec <- strsplit(org_data$seq, "")[[1]]
+  
+  # Mutation 1: Pair target_pos with pos_to_mutate_1
+  base_at_target <- seq_vec[target_pos]
+  base_to_mutate_1 <- seq_vec[pos_to_mutate_1]
+  complement_1 <- get_complement(base_at_target)
+  seq_vec[pos_to_mutate_1] <- complement_1
+  
+  # Mutation 2: Pair target_pos + 1 with pos_to_mutate_2
+  base_at_adjacent <- seq_vec[target_pos + 1]
+  base_to_mutate_2 <- seq_vec[pos_to_mutate_2]
+  complement_2 <- get_complement(base_at_adjacent)
+  seq_vec[pos_to_mutate_2] <- complement_2
+  
+  # --- Format Output ---
+  mutated_seq <- paste(seq_vec, collapse = "")
+  mutation_info <- sprintf("%s%d%s, %s%d%s", 
+                           base_to_mutate_1, pos_to_mutate_1, complement_1,
+                           base_to_mutate_2, pos_to_mutate_2, complement_2)
+  
+  return(list(
+    sequence = mutated_seq,
+    info_string = mutation_info,
+    strategy_used = "seed_hairpin"
+  ))
+}
+
+find_and_mutate_to_create_pair <- function(org_data, config) {
+  
+  # Strategy 1: Try to extend the nearest stem (high priority)
+  result <- attempt_extend_stem(org_data, config)
+  
+  if (!is.null(result)) {
+    return(result)
+  }
+  
+  # Strategy 2: If extending failed, try to seed a new hairpin (fallback)
+  result <- attempt_seed_hairpin(org_data, config)
+  
+  return(result)
 }
 
 # ---- Analysis Functions ----
@@ -264,17 +366,12 @@ main_workflow <- function(config) {
       
       # 2. Pass it to the updated function
       mutation_result <- mutate_to_break_pair(org_data$seq, partner_pos, target_base)
-      # 
-      # mutation_result <- mutate_to_break_pair(org_data$seq, partner_pos)
-      strategy <- "break_pair"
+
+      #strategy <- "break_pair"
       
       
     } else { # status is "unpaired"
-      #mutation_result <- find_and_mutate_to_create_pair(org_data$seq, org_data$dot_bracket, config$target_pos)
-      
-      # --- PLACEHOLDER for the harder case ---
-      #cat(sprintf("  - INFO: Target position %d in %s is already unpaired. Logic to create a pair is not yet implemented. Skipping.\n", config$target_pos, org_data$name))
-      return(NULL) # Skip this sequence for now
+      mutation_result <- find_and_mutate_to_create_pair(org_data, config)
     }
     
     # If a mutation was possible, return a row for our results table
@@ -286,7 +383,7 @@ main_workflow <- function(config) {
           original_dot_bracket = org_data$dot_bracket,
           target_pos = config$target_pos,
           original_status = original_status,
-          strategy = strategy,
+          strategy = mutation_result$strategy_used,
           mutated_seq = mutation_result$sequence,
           mutation_info = mutation_result$info_string,
           stringsAsFactors = FALSE
@@ -336,23 +433,30 @@ main_workflow <- function(config) {
   write.csv(final_analysis, config$output_csv, row.names = FALSE)
   
   # Generate a simple summary report
-  total_processed <- length(all_fold_files)
-  total_attempted <- nrow(mutation_plan_df)
-  total_successful <- sum(final_analysis$is_successful, na.rm = TRUE)
+  break_pair_results <- filter(final_analysis, strategy == "break_pair")
+  extend_stem_results <- filter(final_analysis, strategy == "extend_stem")
+  seed_hairpin_results <- filter(final_analysis, strategy == "seed_hairpin")
   
   summary_text <- c(
     "===== Pairing Status Flip: Summary Report =====",
     "",
     paste("Target Position:", config$target_pos),
-    paste("Total files processed:", total_processed),
-    "",
-    "--- Strategy: Unpair a Paired Site ---",
-    paste("Sequences where target was initially paired:", total_attempted),
-    paste("Successfully flipped to unpaired:", total_successful),
-    paste("Failed to flip:", total_attempted - total_successful),
-    "",
-    "--- Strategy: Pair an Unpaired Site ---",
-    "Logic for this strategy is not yet implemented.",
+    paste("Total files processed:", length(all_fold_files)),
+    "---",
+    "Strategy 1: Unpair a Paired Site",
+    paste("  - Sequences attempted:", nrow(break_pair_results)),
+    paste("  - Successfully flipped to unpaired:", sum(break_pair_results$is_successful, na.rm = TRUE)),
+    "---",
+    "Strategy 2: Pair an Unpaired Site",
+    "  Sub-strategy: Extend Nearest Stem",
+    paste("    - Sequences attempted:", nrow(extend_stem_results)),
+    paste("    - Successfully flipped to paired:", sum(extend_stem_results$is_successful, na.rm = TRUE)),
+    "  Sub-strategy: Seed New Hairpin (Fallback)",
+    paste("    - Sequences attempted:", nrow(seed_hairpin_results)),
+    paste("    - Successfully flipped to paired:", sum(seed_hairpin_results$is_successful, na.rm = TRUE)),
+    "---",
+    paste("Total mutations attempted:", nrow(final_analysis)),
+    paste("Total successful flips (any type):", sum(final_analysis$is_successful, na.rm = TRUE)),
     "============================================="
   )
   writeLines(summary_text, config$output_summary)
