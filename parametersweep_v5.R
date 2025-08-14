@@ -653,6 +653,9 @@ run_parameter_sweep <- function(chunk_size = 4) {
         summary = summary_df
       )
       
+      run_dir_files <- list.files(run_dir, include.dirs = TRUE, full.names = TRUE, recursive = TRUE)
+      unlink(run_dir_files, recursive = TRUE)
+      
       saveRDS(result, file.path(run_dir, "intermediate_result.rds"))
       #write.csv(summary_df, file.path(run_dir, "summary.csv"), row.names = FALSE)
 
