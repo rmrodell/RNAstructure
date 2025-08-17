@@ -35,9 +35,29 @@ if (is.null(input_csv)) {
   stop("Input CSV is required. Use --input to specify the file.")
 }
 
+# Handle missing or empty input file
+if (!file.exists(input_csv) || file.info(input_csv)$size <= 3) {
+  cat("Warning: Input file is missing or empty. Creating an empty output file.\n")
+  header <- "filename,fasta_sequence,dot_bracket,paired1_start,paired1_end,paired2_start,paired2_end,paired1_disruption,paired1_compensatory,paired2_disruption,paired2_compensatory,combined_disruption,combined_compensatory\n"
+  writeLines(header, output_csv)
+  quit(status = 0)
+}
 
 # --- Load input ---
 results <- read.csv(input_csv, stringsAsFactors = FALSE)
+
+# Handle header-only input file
+if (nrow(results) == 0) {
+  cat("Warning: Input file contains no data rows. Writing an empty output file.\n")
+  results$paired1_disruption <- character(0)
+  results$paired1_compensatory <- character(0)
+  results$paired2_disruption <- character(0)
+  results$paired2_compensatory <- character(0)
+  results$combined_disruption <- character(0)
+  results$combined_compensatory <- character(0)
+  write.csv(results, output_csv, row.names = FALSE)
+  quit(status = 0)
+}
 
 # --- Helper functions ---
 # Function to convert dot-bracket to base-pair indices
@@ -104,7 +124,7 @@ if (has_paired2) {
 }
 
 # --- Process each sequence ---
-for (row in 1:nrow(results)) {
+for (row in seq_len(nrow(results))) {
   seq_vec <- strsplit(results$fasta_sequence[row], "")[[1]]
   dbn <- results$dot_bracket[row]
   pairs <- db_to_pairs(dbn)
