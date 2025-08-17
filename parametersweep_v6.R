@@ -16,52 +16,52 @@ get_script_path <- function() {
 }
 
 SCRIPT_DIR <- get_script_path()
-#SCRIPT_DIR <- "/scratch/users/rodell/motifmatcher/RNAstructure"
+# SCRIPT_DIR <- "/scratch/users/rodell/motifmatcher/RNAstructure"
 
 # Define parameter ranges
-# PARAMETER_RANGES <- list(
-#   input_position = 59, 
-#   offset_min = 0:0,
-#   offset_max = 1:2,
-#   include_unpaired1 = c(FALSE, TRUE),
-#   paired1_min = 1:3,
-#   paired1_max = 4:9,
-#   unpaired2_min = 1:3,
-#   unpaired2_max = 4:4,
-#   include_paired2 = c(FALSE, TRUE)
-# )
-
-# UNPAIRED1_RANGES <- list(
-#   unpaired1_min = 1:3,
-#   unpaired1_max = 4:9
-# )
-
-# PAIRED2_RANGES <- list(
-#   paired2_min = 1:2,
-#   paired2_max = 4:9
-# )
-
 PARAMETER_RANGES <- list(
-  input_position = 59, 
+  input_position = 59,
   offset_min = 0:0,
-  offset_max = 1:1,
+  offset_max = 1:2,
   include_unpaired1 = c(FALSE, TRUE),
-  paired1_min = 1:2,
-  paired1_max = 4:4,
-  unpaired2_min = 1:2,
+  paired1_min = 1:3,
+  paired1_max = 4:9,
+  unpaired2_min = 1:3,
   unpaired2_max = 4:4,
   include_paired2 = c(FALSE, TRUE)
 )
 
 UNPAIRED1_RANGES <- list(
-  unpaired1_min = 1:1,
-  unpaired1_max = 4:4
+  unpaired1_min = 1:3,
+  unpaired1_max = 4:9
 )
 
 PAIRED2_RANGES <- list(
-  paired2_min = 1:1,
-  paired2_max = 4:4
+  paired2_min = 1:2,
+  paired2_max = 4:9
 )
+
+# PARAMETER_RANGES <- list(
+#   input_position = 59, 
+#   offset_min = 0:0,
+#   offset_max = 1:1,
+#   include_unpaired1 = c(FALSE, TRUE),
+#   paired1_min = 1:1,
+#   paired1_max = 4:4,
+#   unpaired2_min = 3:3,
+#   unpaired2_max = 4:4,
+#   include_paired2 = c(FALSE, TRUE)
+# )
+# 
+# UNPAIRED1_RANGES <- list(
+#   unpaired1_min = 1:1,
+#   unpaired1_max = 4:4
+# )
+# 
+# PAIRED2_RANGES <- list(
+#   paired2_min = 1:1,
+#   paired2_max = 4:4
+# )
 
 # Capture warnings
 warning_messages <- character()
@@ -91,7 +91,7 @@ dataset_file <- opt$dataset
 
 # input_file <- "input_pool1.csv"
 # fold_dir <- "/scratch/users/rodell/RNAfold_psipos"
-# output_dir <- "20250729/output_test1"
+# output_dir <- "20250816/output_test4"
 # dataset_file <- "pool1_psipos_v2.csv"
 
 
@@ -230,6 +230,20 @@ run_motif_matcher <- function(motif_matcher_path, output_file, params, fold_dir)
 }
 
 calculate_statistics <- function(df, filtered_pool1_df) {
+  
+  if (nrow(df) == 0) {
+    return(list(
+      total_sequences = nrow(pool1_df),
+      total_matches = 0,
+      both_count = 0,
+      incell_count = 0,
+      invitro_count = 0,
+      f1_both_structure = 0,
+      f1_both_unuar_and_structure = 0,
+      f1_both_uguag_and_structure = 0
+    ))
+  }
+  
   structure_motif <- rep(1, nrow(df))
   unuar_and_structure <- ifelse(filtered_pool1_df$UNUAR == 1 & structure_motif == 1, 1, 0)
   uguag_and_structure <- ifelse(filtered_pool1_df$UGUAG == 1 & structure_motif == 1, 1, 0)
@@ -305,6 +319,12 @@ generate_mutants <- function(motif_matches_file, protect_pos = 60, run_id) {
                       stderr = TRUE)
     
     
+    # Check if the output file is missing or empty
+    if (!file.exists(test_output) || file.info(test_output)$size == 0) {
+      cat("Warning: Mutant output file", test_output, "is missing or empty for run_id:", run_id, "\n")
+      return(data.frame())
+    }
+
     # Read the results
     #mutant_results <- read.csv(temp_output, stringsAsFactors = FALSE)
     mutant_results <- read.csv(test_output, stringsAsFactors = FALSE)
@@ -443,11 +463,14 @@ find_motifs <- function(params, run_dir, output_filename = "motif_matches.csv", 
 
   cmd_output <- run_motif_matcher(motif_matcher_path, output_file, params)
   
-  if (!file.exists(output_file)) {
-    cat("Error: Output file not created for run:", basename(run_dir), "\n")
-    cat("Command output:\n", paste(cmd_output, collapse = "\n"), "\n")
-    return(NULL)
+  # Check if the file is missing OR empty before trying to read it
+  if (!file.exists(output_file) || file.info(output_file)$size <= 3) {
+    cat("Warning: Output file", output_file, "is missing or empty for run:", basename(run_dir), "\n")
+    cat("Command output was:\n", paste(cmd_output, collapse = "\n"), "\n")
+    # Return an empty dataframe to avoid crashing downstream processes
+    return(data.frame()) 
   }
+
 
   df <- read.csv(output_file)
   return(df)
@@ -469,6 +492,9 @@ run_initial_motif_analysis <- function(params, run_dir) {
 }
 
 run_rnafold_and_motif_matching <- function(params, run_id, run_dir, output_dir, script_dir, initial_results) {
+  
+  #cat("Run RNAfold on mutants.. \n")
+  
   rnafold_result <- run_rnafold(run_id = run_id, output_dir = output_dir, script_dir = script_dir)
   rnafold_results_dir <- file.path(output_dir, "individual_results", run_id, "rnafold_results")
   
@@ -477,11 +503,15 @@ run_rnafold_and_motif_matching <- function(params, run_id, run_dir, output_dir, 
   
   for (subfolder in list.dirs(rnafold_results_dir, recursive = FALSE)) {
     base_name <- basename(subfolder)
+    
+    #cat("Check motifs for", base_name, "\n")
+    
     dir.create(subfolder, recursive = TRUE, showWarnings = FALSE)
     
     rnafold_df <- find_motifs(params, run_dir, 
                               output_filename = paste0(base_name, "_motif_matches.csv"),
                               fold_dir = subfolder)
+    
     
     motif_match_results[[base_name]] <- rnafold_df
     
@@ -499,35 +529,45 @@ run_rnafold_and_motif_matching <- function(params, run_id, run_dir, output_dir, 
   return(list(results = motif_match_results, stats = rnafold_stats, sequence_comparison = sequence_comparison))
 }
 
+# Helper function to safely extract filenames from a results data frame
+extract_filenames <- function(results_list, key) {
+  df <- results_list[[key]]
+  
+  # Check if df is a valid, non-empty data frame with the 'filename' column
+  if (!is.null(df) && is.data.frame(df) && "filename" %in% names(df) && nrow(df) > 0) {
+    return(df$filename)
+  } else {
+    # Otherwise, return an empty character vector (represents an empty set)
+    return(character(0))
+  }
+}
+
 # Identify sequences in disrupted and compensated and modified
 compare_mutant_sequences <- function(motif_match_results) {
-  # Extract sequence names from each result
-  paired1_comp_seq <- if ("paired1_compensatory" %in% names(motif_match_results)) 
-                        motif_match_results[["paired1_compensatory"]]$filename else NULL
-  paired1_disr_seq <- if ("paired1_disruption" %in% names(motif_match_results)) 
-                        motif_match_results[["paired1_disruption"]]$filename else NULL
-  paired2_comp_seq <- if ("paired2_compensatory" %in% names(motif_match_results)) 
-                        motif_match_results[["paired2_compensatory"]]$filename else NULL
-  paired2_disr_seq <- if ("paired2_disruption" %in% names(motif_match_results)) 
-                        motif_match_results[["paired2_disruption"]]$filename else NULL
+  # Safely extract sequence names using the new helper function
+  paired1_comp_seq <- extract_filenames(motif_match_results, "paired1_compensatory")
+  paired1_disr_seq <- extract_filenames(motif_match_results, "paired1_disruption")
+  paired2_comp_seq <- extract_filenames(motif_match_results, "paired2_compensatory")
+  paired2_disr_seq <- extract_filenames(motif_match_results, "paired2_disruption")
+  combined_comp_seq <- extract_filenames(motif_match_results, "combined_compensatory")
+  combined_disr_seq <- extract_filenames(motif_match_results, "combined_disruption")
   
   count_unique <- function(comp_seq, disr_seq) {
     if (is.null(comp_seq) || is.null(disr_seq)) return(list(diff = NA, count = NA))
+    
     unique_set <- setdiff(comp_seq, disr_seq)
+    
+    # If unique_set is empty, we can return 0 counts without calling filter_and_count
+    if (length(unique_set) == 0) {
+      return(list(diff = 0, count = 0))
+    }
+    
     count_result <- filter_and_count(data.frame(filename = unique_set), pool1_df)
     list(diff = count_result$total_input, count = count_result$count)
   }
-
+  
   paired1_result <- count_unique(paired1_comp_seq, paired1_disr_seq)
   paired2_result <- count_unique(paired2_comp_seq, paired2_disr_seq)
-  
-  # 1. Extract sequence names for the new combined results
-  combined_comp_seq <- if ("combined_compensatory" %in% names(motif_match_results)) 
-                        motif_match_results[["combined_compensatory"]]$filename else NULL
-  combined_disr_seq <- if ("combined_disruption" %in% names(motif_match_results)) 
-                        motif_match_results[["combined_disruption"]]$filename else NULL
-
-  # 2. Use the existing helper to count rescued and validated sequences
   combined_result <- count_unique(combined_comp_seq, combined_disr_seq)
   
   return(list(
@@ -618,6 +658,7 @@ run_parameter_sweep <- function(chunk_size = 4) {
   results_list <- vector("list", total_combinations)
   
   for (chunk_start in seq(1, total_combinations, by = chunk_size)) {
+  #for (chunk_start in seq(371, total_combinations, by = chunk_size)) {
     chunk_end <- min(chunk_start + chunk_size - 1, total_combinations)
     cat("Processing combinations", chunk_start, "to", chunk_end, "\n")
     
@@ -637,6 +678,7 @@ run_parameter_sweep <- function(chunk_size = 4) {
       run_dir <- file.path(output_dir, "individual_results", run_id)
       
       dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
+      #cat("Processing ", run_id, "\n")
 
       #cat("Running initial motif matcher analysis...\n")
       initial_analysis <- run_initial_motif_analysis(params, run_dir)
@@ -661,6 +703,7 @@ run_parameter_sweep <- function(chunk_size = 4) {
       #cat("Starting RNAfold and subsequent motif matching...\n")
       rnafold_analysis <- run_rnafold_and_motif_matching(params, run_id, run_dir, output_dir, SCRIPT_DIR, initial_analysis$result)
       
+      #cat("Generating summary dataframe...\n")
       summary_df <- generate_summary_df(params, initial_analysis, rnafold_analysis, all_possible_columns)
 
       result <- list(
@@ -689,7 +732,18 @@ run_parameter_sweep <- function(chunk_size = 4) {
     saveRDS(results_list, file.path(output_dir, "checkpoint.rds"))
   }
   
-  all_results <- do.call(rbind, results_list)
+  # all_results <- do.call(rbind, results_list)
+  
+  valid_results <- results_list[!sapply(results_list, is.null)]
+  
+  # Check if there are any valid results to bind
+  if (length(valid_results) == 0) {
+    cat("Warning: No valid results were generated to create a final summary file.\n")
+    return(data.frame()) # Return an empty data frame
+  }
+  
+  all_results <- do.call(rbind, valid_results)
+  
   write.csv(all_results, file.path(output_dir, "all_analysis_results.csv"), row.names = FALSE)
   
   return(all_results)
