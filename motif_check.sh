@@ -67,6 +67,8 @@ mutant_types=(
     "paired1_disruption"
     "paired2_compensatory"
     "paired2_disruption"
+    "combined_compensatory"
+    "combined_disruption"
 )
 
 # best-f1
