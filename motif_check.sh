@@ -3,8 +3,8 @@
 ml biology viennarna
 ml R
 
-out_dir_bestf1="/scratch/users/rodell/motifmatcher/20250802/analysis/test"
-out_dir_mostmut="/scratch/users/rodell/motifmatcher/20250802/analysis/mostmut"
+out_dir_bestf1="/scratch/users/rodell/motifmatcher/20250816/analysis/bestf1"
+out_dir_mostmut="/scratch/users/rodell/motifmatcher/20250816/analysis/bestmoremut"
 
 mkdir -p $out_dir_bestf1
 mkdir -p $out_dir_mostmut
@@ -15,24 +15,24 @@ mkdir -p $out_dir_mostmut
 Rscript /scratch/users/rodell/motifmatcher/RNAstructure/motif_matcher_v3.R \
     --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "/scratch/users/rodell/RNAfold_psipos" \
     --output "${out_dir_bestf1}/motifmatcher1.csv" \
-    --offset_min 0 --offset_max 2 \
-    --min_unpaired1 1 --max_unpaired1 4 \
-    --min_paired1 2 --max_paired1 7 \
+    --offset_min 0 --offset_max 1 \
+    --min_unpaired1 1 --max_unpaired1 7 \
+    --min_paired1 3 --max_paired1 5 \
     --min_unpaired2 3 --max_unpaired2 5 \
-    --min_paired2 1 --max_paired2 4 \
+    --min_paired2 1 --max_paired2 5 \
     --include_unpaired1 TRUE --include_paired2 TRUE
+
 
 # most-mut
 Rscript /scratch/users/rodell/motifmatcher/RNAstructure/motif_matcher_v3.R \
     --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "/scratch/users/rodell/RNAfold_psipos" \
     --output "${out_dir_mostmut}/motifmatcher1.csv" \
     --offset_min 0 --offset_max 2 \
-    --min_unpaired1 1 --max_unpaired1 8 \
-    --min_paired1 2 --max_paired1 9 \
-    --min_unpaired2 3 --max_unpaired2 9 \
-    --min_paired2 1 --max_paired2 4 \
+    --min_unpaired1 1 --max_unpaired1 5 \
+    --min_paired1 1 --max_paired1 7 \
+    --min_unpaired2 3 --max_unpaired2 5 \
+    --min_paired2 1 --max_paired2 5 \
     --include_unpaired1 TRUE --include_paired2 TRUE
-
 
 # --- Perform mutagenesis with mutagenesis.R for the matching sequences. ---
 
@@ -95,11 +95,11 @@ for mutant in "${mutant_types[@]}"; do
     Rscript /scratch/users/rodell/motifmatcher/RNAstructure/motif_matcher_v3.R \
         --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "${out_dir_bestf1}/${mutant}" \
         --output "${out_dir_bestf1}/${mutant}_motifmatcher2.csv" \
-        --offset_min 0 --offset_max 2 \
-        --min_unpaired1 1 --max_unpaired1 4 \
-        --min_paired1 2 --max_paired1 7 \
+        --offset_min 0 --offset_max 1 \
+        --min_unpaired1 1 --max_unpaired1 7 \
+        --min_paired1 3 --max_paired1 5 \
         --min_unpaired2 3 --max_unpaired2 5 \
-        --min_paired2 1 --max_paired2 4 \
+        --min_paired2 1 --max_paired2 5 \
         --include_unpaired1 TRUE --include_paired2 TRUE
 
 done
@@ -111,10 +111,10 @@ for mutant in "${mutant_types[@]}"; do
         --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "${out_dir_mostmut}/${mutant}" \
         --output "${out_dir_mostmut}/${mutant}_motifmatcher2.csv" \
         --offset_min 0 --offset_max 2 \
-        --min_unpaired1 1 --max_unpaired1 8 \
-        --min_paired1 2 --max_paired1 9 \
-        --min_unpaired2 3 --max_unpaired2 9 \
-        --min_paired2 1 --max_paired2 4 \
+        --min_unpaired1 1 --max_unpaired1 5 \
+        --min_paired1 1 --max_paired1 7 \
+        --min_unpaired2 3 --max_unpaired2 5 \
+        --min_paired2 1 --max_paired2 5 \
         --include_unpaired1 TRUE --include_paired2 TRUE
 
 done
