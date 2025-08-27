@@ -748,7 +748,7 @@ run_parameter_sweep <- function(chunk_size = 4) {
         return(NULL)
       }
       
-      mutant_result <- generate_mutants(motif_matches_file, run_id = run_id)
+      mutant_result <- generate_mutants(motif_matches_file, run_id = run_id, protect_pos = params$input_position + 1)
       if (is.null(mutant_result) || !is.data.frame(mutant_result)) {
         cat("Error: generate_mutants failed\n")
         return(NULL)
