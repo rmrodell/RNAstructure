@@ -12,7 +12,7 @@ mkdir -p $out_dir_mostmut
 # --- Run motif_matcher_v3.R with the given parameter sets. ---
 
 # best-f1
-Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/motif_matcher_v3.R \
+Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep_MFE/motif_matcher_v3.R \
     --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "/scratch/users/rodell/20250821_poollength/all_extend_trimmed" \
     --output "${out_dir_bestf1}/motifmatcher1.csv" \
     --input_position 66 \
@@ -25,7 +25,7 @@ Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/motif_ma
 
 
 # most-mut
-Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/motif_matcher_v3.R \
+Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep_MFE/motif_matcher_v3.R \
     --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "/scratch/users/rodell/20250821_poollength/all_extend_trimmed" \
     --output "${out_dir_mostmut}/motifmatcher1.csv" \
     --input_position 66 \
@@ -39,11 +39,11 @@ Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/motif_ma
 # --- Perform mutagenesis with mutagenesis.R for the matching sequences. ---
 
 # best-f1
-Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/mutagenesis.R \
+Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep_MFE/mutagenesis.R \
     --input "${out_dir_bestf1}/motifmatcher1.csv" --output "${out_dir_bestf1}/mutagenesis.csv" --protect_position 67
 
 # most-mut
-Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/mutagenesis.R \
+Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep_MFE/mutagenesis.R \
     --input "${out_dir_mostmut}/motifmatcher1.csv" --output "${out_dir_mostmut}/mutagenesis.csv" --protect_position 67
 
 
@@ -61,7 +61,7 @@ Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/write_mu
 
 # --- Run RNAfold on mutated sequences with run_RNAfold.sh ---
 
-SCRIPT="/scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/run_RNAfold.sh"
+SCRIPT="/scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep_MFE/run_RNAfold.sh"
 
 # List of mutants to process
 mutant_types=(
@@ -96,30 +96,32 @@ done
 # best-f1
 for mutant in "${mutant_types[@]}"; do
 
-    Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/motif_matcher_v3.R \
+    Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep_MFE/motif_matcher_v3.R \
         --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "${out_dir_bestf1}/${mutant}" \
         --output "${out_dir_bestf1}/${mutant}_motifmatcher2.csv" \
+        --input_position 66 \
         --offset_min 0 --offset_max 1 \
-        --min_unpaired1 3 --max_unpaired1 8 \
-        --min_paired1 2 --max_paired1 4 \
-        --min_unpaired2 3 --max_unpaired2 4 \
-        --min_paired2 0 --max_paired2 0 \
-        --include_unpaired1 TRUE --include_paired2 FALSE
+        --min_unpaired1 1 --max_unpaired1 4 \
+        --min_paired1 3 --max_paired1 5 \
+        --min_unpaired2 2 --max_unpaired2 5 \
+        --min_paired2 1 --max_paired2 4 \
+        --include_unpaired1 TRUE --include_paired2 TRUE
 
 done
 
 # most-mut
 for mutant in "${mutant_types[@]}"; do
 
-    Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep/motif_matcher_v3.R \
+    Rscript /scratch/users/rodell/motifmatcher/RNAstructure/parameter_sweep_MFE/motif_matcher_v3.R \
         --input "/scratch/users/rodell/motifmatcher/input_pool1.csv" --fold_dir "${out_dir_mostmut}/${mutant}" \
         --output "${out_dir_mostmut}/${mutant}_motifmatcher2.csv" \
+        --input_position 66 \
         --offset_min 0 --offset_max 1 \
-        --min_unpaired1 1 --max_unpaired1 8 \
-        --min_paired1 1 --max_paired1 6 \
-        --min_unpaired2 3 --max_unpaired2 6 \
-        --min_paired2 2 --max_paired2 4 \
-        --include_unpaired1 TRUE --include_paired2 TRUE
+        --min_unpaired1 1 --max_unpaired1 4 \
+        --min_paired1 1 --max_paired1 8 \
+        --min_unpaired2 2 --max_unpaired2 5 \
+        --min_paired2 1 --max_paired2 5 \
+        --include_unpaired1 TRUE --include_paired2 TRUE 
 
 done
 
