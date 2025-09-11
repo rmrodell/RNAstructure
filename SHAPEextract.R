@@ -6,8 +6,8 @@ library(data.table)
 args <- commandArgs(trailingOnly = TRUE)
 
 # Default values
-default_num_columns <- 127
-default_output_file <- "RNAfold_output.csv"
+default_num_columns <- 130
+default_output_file <- "SHAPE_reactivities.csv"
 
 # Check for sufficient arguments
 if (length(args) < 3) {
