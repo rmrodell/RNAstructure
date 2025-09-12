@@ -280,9 +280,41 @@ run_motif_matcher <- function(motif_matcher_path, output_file, params, fold_dir)
   system2("Rscript", args = cmd_args, stdout = TRUE, stderr = TRUE)
 }
 
+# calculate_statistics <- function(df, filtered_pool1_df) {
+  
+#   if (nrow(df) == 0) {
+#     return(list(
+#       total_sequences = nrow(pool1_df),
+#       total_matches = 0,
+#       both_count = 0,
+#       incell_count = 0,
+#       invitro_count = 0,
+#       f1_both_structure = 0,
+#       f1_both_unuar_and_structure = 0,
+#       f1_both_uguag_and_structure = 0
+#     ))
+#   }
+  
+#   structure_motif <- rep(1, nrow(df))
+#   unuar_and_structure <- ifelse(filtered_pool1_df$UNUAR == 1 & structure_motif == 1, 1, 0)
+#   uguag_and_structure <- ifelse(filtered_pool1_df$UGUAG == 1 & structure_motif == 1, 1, 0)
+  
+#   list(
+#     total_sequences = nrow(pool1_df),
+#     total_matches = nrow(df),
+#     both_count = sum(filtered_pool1_df$both == 1),
+#     incell_count = sum(filtered_pool1_df$incell == 1),
+#     invitro_count = sum(filtered_pool1_df$invitro == 1),
+#     f1_both_structure = calculate_f1_score(filtered_pool1_df$both, structure_motif),
+#     f1_both_unuar_and_structure = calculate_f1_score(filtered_pool1_df$both, unuar_and_structure),
+#     f1_both_uguag_and_structure = calculate_f1_score(filtered_pool1_df$both, uguag_and_structure)
+#   )
+# }
+
 calculate_statistics <- function(df, filtered_pool1_df) {
   
   if (nrow(df) == 0) {
+    # If no structural motifs are found at all, all F1 scores involving structure are 0
     return(list(
       total_sequences = nrow(pool1_df),
       total_matches = 0,
@@ -295,9 +327,13 @@ calculate_statistics <- function(df, filtered_pool1_df) {
     ))
   }
   
-  structure_motif <- rep(1, nrow(df))
-  unuar_and_structure <- ifelse(filtered_pool1_df$UNUAR == 1 & structure_motif == 1, 1, 0)
-  uguag_and_structure <- ifelse(filtered_pool1_df$UGUAG == 1 & structure_motif == 1, 1, 0)
+  # Create a prediction vector for the *entire* dataset
+  # It gets a 1 if the sequence was found by the motif matcher, and 0 otherwise.
+  prediction_structure <- as.integer(pool1_df$chr %in% filtered_pool1_df$chr)
+  
+  # Create combined prediction vectors based on the full-dataset prediction
+  prediction_unuar_and_structure <- as.integer(pool1_df$UNUAR == 1 & prediction_structure == 1)
+  prediction_uguag_and_structure <- as.integer(pool1_df$UGUAG == 1 & prediction_structure == 1)
   
   list(
     total_sequences = nrow(pool1_df),
@@ -305,9 +341,9 @@ calculate_statistics <- function(df, filtered_pool1_df) {
     both_count = sum(filtered_pool1_df$both == 1),
     incell_count = sum(filtered_pool1_df$incell == 1),
     invitro_count = sum(filtered_pool1_df$invitro == 1),
-    f1_both_structure = calculate_f1_score(filtered_pool1_df$both, structure_motif),
-    f1_both_unuar_and_structure = calculate_f1_score(filtered_pool1_df$both, unuar_and_structure),
-    f1_both_uguag_and_structure = calculate_f1_score(filtered_pool1_df$both, uguag_and_structure)
+    f1_both_structure = calculate_f1_score(pool1_df$both, prediction_structure),
+    f1_both_unuar_and_structure = calculate_f1_score(pool1_df$both, prediction_unuar_and_structure),
+    f1_both_uguag_and_structure = calculate_f1_score(pool1_df$both, prediction_uguag_and_structure)
   )
 }
 
@@ -356,19 +392,19 @@ find_motifs <- function(params, run_dir, output_filename = "motif_matches.csv", 
   return(df)
 }
 
-run_initial_motif_analysis <- function(params, run_dir) {
-  initial_result <- find_motifs(params, run_dir)
-  if (is.null(initial_result)) {
+run_motif_analysis <- function(params, run_dir) {
+  result <- find_motifs(params, run_dir)
+  if (is.null(result)) {
     cat("Error: Initial analysis returned NULL\n")
     return(NULL)
   }
   
   filtered_pool1_df <- pool1_df %>%
-    filter(sapply(chr, function(x) any(str_detect(initial_result$filename, fixed(x)))))
+    filter(sapply(chr, function(x) any(str_detect(result$filename, fixed(x)))))
   
-  initial_stats <- calculate_statistics(initial_result, filtered_pool1_df)
+  stats <- calculate_statistics(result, filtered_pool1_df)
   
-  return(list(result = initial_result, stats = initial_stats))
+  return(list(result = result, stats = stats))
 }
 
 # Helper function to safely extract filenames from a results data frame
@@ -403,7 +439,7 @@ define_all_possible_columns <- function() {
   return(c(base_columns, stat_columns))
 }
 
-generate_summary_df <- function(params, initial_analysis, all_possible_columns) {
+generate_summary_df <- function(params, analysis, all_possible_columns) {
   summary_df <- data.frame(matrix(NA, nrow = 1, ncol = length(all_possible_columns)))
   colnames(summary_df) <- all_possible_columns
   
@@ -415,10 +451,10 @@ generate_summary_df <- function(params, initial_analysis, all_possible_columns) 
   }
   
   # Fill in initial analysis results
-  for (stat_name in names(initial_analysis$stats)) {
-    col_name <- paste0("initial_", stat_name)
+  for (stat_name in names(analysis$stats)) {
+    col_name <- stat_name
     if (col_name %in% colnames(summary_df)) {
-      summary_df[[col_name]] <- initial_analysis$stats[[stat_name]]
+      summary_df[[col_name]] <- analysis$stats[[stat_name]]
     }
   }
 
@@ -461,15 +497,15 @@ run_parameter_sweep <- function(chunk_size = 4) {
       cat("Processing ", run_id, "\n")
 
       cat("Running initial motif matcher analysis...\n")
-      initial_analysis <- run_initial_motif_analysis(params, run_dir)
-      if (is.null(initial_analysis)) return(NULL)
+      analysis <- run_motif_analysis(params, run_dir)
+      if (is.null(analysis)) return(NULL)
       
       cat("Generating summary dataframe...\n")
-      summary_df <- generate_summary_df(params, initial_analysis, all_possible_columns)
+      summary_df <- generate_summary_df(params, analysis, all_possible_columns)
 
       result <- list(
         params = params,
-        initial_result = initial_analysis$result,
+        result = analysis$result,
         summary = summary_df
       )
       
