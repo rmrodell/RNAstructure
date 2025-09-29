@@ -1,0 +1,26 @@
+# Set up a python environment
+
+ml devel python/3.9.0
+
+python3 -m venv varna-env
+
+source /scratch/groups/nicolemm/rodell/SHAPE/InVitro_2repHighQ_Analysis/varna-env/bin/activate <- run this every time you start working on this project
+
+# Download varna
+
+Set up a directory: /home/users/rodell/varna
+Download the VARNA .jar file: wget http://varna.lri.fr/bin/VARNAv3-93.jar
+Load the required Java module: module load java/17.0.4
+Create a small test case to confirm VARNA can run from the command line
+
+
+# Run on Pool1 Sites
+Information about psi is only added to PUS7 intersection sites: 
+/scratch/groups/nicolemm/rodell/SHAPE/InVitro_2repHighQ_Analysis/varna/prepare_data_PUS7.py
+
+Output to different directories depending on the PUS7-dependency
+
+# Combine images to a single file for easy viewing
+ml system imagemagick
+cd to directory with structures
+montage -label '%f' -density 300 -size 1000x1000 *.svg -tile 2x -geometry +20+20 pus7_structure_catalog.png
