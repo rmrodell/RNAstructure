@@ -68,7 +68,7 @@ read_fold_file <- function(file_path) {
   if (length(lines) >= 3) {
     name <- sub(">", "", lines[1])
     seq <- lines[2]
-    dot_bracket <- strsplit(lines[3], " ")[[1]][1]
+    dot_bracket <- strsplit(lines[6], " ")[[1]][1]
     return(data.frame(name = name, seq = seq, dot_bracket = dot_bracket, stringsAsFactors = FALSE))
   } else {
     warning(paste("File", file_path, "does not have the expected format"))
