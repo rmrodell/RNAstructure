@@ -41,6 +41,9 @@ extract_fold_info <- function(file_path) {
       stop("File does not contain enough lines for full parsing.")
     }
     
+    # Define a robust regex for parsing numbers, including scientific notation
+    num_regex <- "[-]?\\d*\\.?\\d+(?:[eE][-+]?\\d+)?"
+
     # --- Line-by-Line Extraction (Corrected based on new format) ---
     
     # Lines 1 & 2: ID and Sequence
@@ -49,26 +52,26 @@ extract_fold_info <- function(file_path) {
     
     # Line 3: MFE (Minimum Free Energy)
     mfe_structure <- str_extract(lines[3], "^[().]+")
-    mfe_energy <- as.numeric(str_extract(lines[3], "(?<=\\()\\s*[-]?[0-9.]+(?=\\s*\\)$)"))
+    mfe_energy <- as.numeric(str_extract(lines[3], sprintf("(?<=\\()\\s*(%s)(?=\\s*\\)$)", num_regex)))
     
     # Line 4: Probabilistic Dot-Plot Representation
     dot_plot_representation <- str_extract(lines[4], "^[().|,{}]+")
-    dot_plot_energy <- as.numeric(str_extract(lines[4], "(?<=\\[)\\s*[-]?[0-9.]+(?=\\s*\\]$)"))
+    dot_plot_energy <- as.numeric(str_extract(lines[4], sprintf("(?<=\\[)\\s*(%s)(?=\\s*\\]$)", num_regex)))
     
     # Line 5: Centroid Structure
     centroid_structure <- str_extract(lines[5], "^[().]+")
-    centroid_energy <- as.numeric(str_extract(lines[5], "(?<=\\{)\\s*[-]?[0-9.]+"))
-    centroid_distance <- as.numeric(str_extract(lines[5], "(?<=d=)\\s*[0-9.]+(?=\\s*\\})"))
+    centroid_energy <- as.numeric(str_extract(lines[5], sprintf("(?<=\\{)\\s*(%s)", num_regex)))
+    centroid_distance <- as.numeric(str_extract(lines[5], sprintf("(?<=d=)\\s*(%s)(?=\\s*\\})", num_regex)))
     
     # Line 6: MEA (Maximum Expected Accuracy) Structure
     mea_structure <- str_extract(lines[6], "^[().]+")
-    mea_energy <- as.numeric(str_extract(lines[6], "(?<=\\{)\\s*[-]?[0-9.]+(?=\\s+MEA=)"))
-    mea_score <- as.numeric(str_extract(lines[6], "(?<=MEA=)\\s*[0-9.]+(?=\\s*\\})"))
+    mea_energy <- as.numeric(str_extract(lines[6], sprintf("(?<=\\{)\\s*(%s)(?=\\s+MEA=)", num_regex)))
+    mea_score <- as.numeric(str_extract(lines[6], sprintf("(?<=MEA=)\\s*(%s)(?=\\s*\\})", num_regex)))
     
     # Line 7: Ensemble Statistics
-    stats <- str_match(lines[7], "frequency of mfe structure in ensemble\\s*([0-9.]+);\\s*ensemble diversity\\s*([0-9.]+)")
-    mfe_frequency <- as.numeric(stats[2])
-    ensemble_diversity <- as.numeric(stats[3])
+    numbers_in_line7 <- str_extract_all(lines[7], num_regex)[[1]]
+    mfe_frequency <- as.numeric(numbers_in_line7[1])
+    ensemble_diversity <- as.numeric(numbers_in_line7[2])
     
     # --- Validation and Result Assembly ---
     essential_values <- c(mfe_structure, mfe_energy, centroid_structure, centroid_energy, 
