@@ -72,18 +72,34 @@ db_to_pairs <- function(dot_bracket) {
   return(pairs)
 }
 
-# --- Helper function to calculate structural identity ---
-calculate_identity <- function(str1, str2) {
-  if (is.na(str1) || is.na(str2) || nchar(str1) != nchar(str2)) {
-    return(NA_real_)
-  }
-  s1 <- strsplit(str1, "")[[1]]
-  s2 <- strsplit(str2, "")[[1]]
+format_window_string <- function(window_vec) {
+  if (length(window_vec) == 0) return(NA_character_)
   
-  hamming_dist <- sum(s1 != s2)
-  identity <- (nchar(str1) - hamming_dist) / nchar(str1)
-  return(identity)
+  window_vec <- sort(unique(window_vec))
+  diffs <- diff(window_vec)
+  
+  # Find where the sequence of consecutive numbers breaks
+  breaks <- c(0, which(diffs > 1), length(window_vec))
+  
+  # Create "start-end" strings for each segment
+  segments <- map_chr(1:(length(breaks) - 1), function(i) {
+    start_index <- breaks[i] + 1
+    end_index <- breaks[i+1]
+    
+    start_val <- window_vec[start_index]
+    end_val <- window_vec[end_index]
+    
+    if (start_val == end_val) {
+      as.character(start_val)
+    } else {
+      paste(start_val, end_val, sep = "-")
+    }
+  })
+  
+  # Join all segments with a comma
+  return(paste(segments, collapse = ", "))
 }
+
 
 
 # --- Core Mutagenesis Function ---
@@ -241,7 +257,7 @@ main <- function() {
   mutants_df <- mutants_df %>%
     mutate(fasta_header = paste(str_remove(original_filename, "\\.fold$"), type, sep = "_"))
   
-  cat(paste("\nGenerated a total of", nrow(mutants_df), "mutant sequences.\n\n"))
+  cat(paste("\nGenerated ", nrow(mutants_df), "mutant sequences.\n\n"))
 
   # --- 4. Run RNAfold in Batch ---
   cat("--- Phase 2: Running RNAfold on all mutants ---\n")
@@ -274,7 +290,7 @@ main <- function() {
   }
 
   # --- 5. Evaluate Mutation Success ---
-  cat("--- Phase 3: Evaluating mutation success ---\n")
+  cat("--- Phase 3: Consolidate Data ---\n")
 
   # Merge back original data for comparison
   results <- mutants_df %>%
@@ -295,121 +311,39 @@ main <- function() {
   results <- results %>%
     mutate(mutant_mea = map_chr(fasta_header, get_mutant_mea))
 
-  # --- Calculate metrics ---
-  cat("Calculating success metrics...\n")
-  results <- results %>%
-    mutate(
-      # Metric 1: Global structural identity
-      global_identity = map2_dbl(original_mea, mutant_mea, calculate_identity),
-      
-      # Metric 2: Local structural identity (for compensation)
-      local_identity = pmap_dbl(list(original_mea, mutant_mea, window), function(o, m, w) {
-        if (is.na(o) || is.na(m)) return(NA_real_)
-        calculate_identity(substr(o, min(w), max(w)), substr(m, min(w), max(w)))
-      }),
-      
-      # Metric 3: Disruption efficacy
-    #   disruption_efficacy = pmap_dbl(list(original_mea, mutant_mea, window, original_pairs), function(o, m, w, p) {
-    #     if (is.na(o) || is.na(m)) return(NA_real_)
-        
-    #     # Paired bases in the original structure within the window
-    #     orig_paired_in_window <- w[substr(o, w, w) %in% c("(", ")")]
-    #     if (length(orig_paired_in_window) == 0) return(1.0) # Or NA? Let's say 100% success if nothing to disrupt.
-        
-    #     # Of those, which are now unpaired in the mutant structure?
-    #     now_unpaired <- sum(substr(m, orig_paired_in_window, orig_paired_in_window) == ".")
-        
-    #     return(now_unpaired / length(orig_paired_in_window))
-    #   }),
-
-      # Calculate the percentage of the window that is unpaired
-      window_unpaired_percent = pmap_dbl(list(mutant_mea, window), function(m, w) {
-        if (is.na(m)) return(NA_real_)
-        
-        # Extract the structure of the target window
-        window_structure <- substr(m, min(w), max(w))
-        if (nchar(window_structure) == 0) return(NA_real_) # Avoid division by zero
-        
-        # Count the number of dots (unpaired bases)
-        unpaired_count <- str_count(window_structure, "\\.")
-        
-        return(unpaired_count / nchar(window_structure))
-      }),
-
-      # --- Extract the dot-bracket notation for the target window ---
-      original_window_mea = pmap_chr(list(original_mea, window), function(mea, w) {
-        if (is.na(mea)) return(NA_character_)
-        substr(mea, min(w), max(w))
-      }),
-      mutant_window_mea = pmap_chr(list(mutant_mea, window), function(mea, w) {
-        if (is.na(mea)) return(NA_character_)
-        substr(mea, min(w), max(w))
-      })
-    )
-
-  # --- Apply success criteria ---
-  results <- results %>%
-    mutate(
-      is_disruption = str_detect(type, "disruption"),
-      base_type = str_extract(type, "upstream|downstream|total")
-    ) %>%
-    mutate(
-      success_criteria = case_when(
-        is_disruption & base_type == "upstream"   ~ window_unpaired_percent >= 0.80 & global_identity >= 0.80,
-        is_disruption & base_type == "downstream" ~ window_unpaired_percent >= 0.80 & global_identity >= 0.75,
-        is_disruption & base_type == "total"      ~ window_unpaired_percent >= 0.80 & global_identity >= 0.60,
-        !is_disruption ~ local_identity >= 0.90 & global_identity >= 0.80,
-        TRUE ~ FALSE
-      )
-    )
-
-  # Handle conditional success for compensation
-  disruption_successes <- results %>%
-    filter(is_disruption & success_criteria) %>%
-    select(original_filename, base_type, disruption_success = success_criteria)
-
-  results <- results %>%
-    left_join(disruption_successes, by = c("original_filename", "base_type")) %>%
-    mutate(
-      success = case_when(
-        is_disruption ~ success_criteria,
-        !is_disruption & is.na(disruption_success) ~ FALSE, # Corresponding disruption failed
-        !is_disruption & disruption_success == TRUE ~ success_criteria, # Disruption succeeded, so use compensation criteria
-        TRUE ~ FALSE
-      )
-    ) %>%
-    select(-is_disruption, -base_type, -success_criteria, -disruption_success)
-
   # --- 6. Save Final Outputs ---
   cat("\n--- Phase 4: Saving final results ---\n")
   
   # Select and reorder columns for clarity
   final_results <- results %>%
+    mutate(
+      target_mut_region = map_chr(window, format_window_string),
+    ) %>%
+    rename(
+      mutant_id = fasta_header,
+      parent_seq = sequence,
+      mutant_seq = seq,
+      parent_db = original_mea,
+      mutant_db = mutant_mea,
+      goal_type = type
+    ) %>%
     select(
+      mutant_id,
+      parent_seq,
+      mutant_seq,
+      parent_db,
+      mutant_db,
+      goal_type,
+      target_mut_region,
       original_filename,
-      type,
-      success,
-      mutations,
-      window_unpaired_percent,
-      local_identity,
-      global_identity,
-      fasta_header,
-      seq,
-      original_window_mea,
-      mutant_window_mea,
-      original_mea,
-      mutant_mea,
-      sequence
+      mutations
     )
   
-  successful_results <- final_results %>% filter(success == TRUE)
 
   # Write to CSV
   all_results_path <- file.path(opt$output_dir, "all_mutagenesis_results.csv")
-  successful_results_path <- file.path(opt$output_dir, "successful_mutagenesis_results.csv")
   
   write.csv(final_results, all_results_path, row.names = FALSE)
-  write.csv(successful_results, successful_results_path, row.names = FALSE)
   
   cat(paste("Saved all results to:", all_results_path, "\n"))
   cat(paste("Saved successful results to:", successful_results_path, "\n"))
