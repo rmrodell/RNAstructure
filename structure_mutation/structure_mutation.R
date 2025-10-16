@@ -311,15 +311,17 @@ main <- function() {
   results <- results %>%
     mutate(mutant_mea = map_chr(fasta_header, get_mutant_mea))
 
+
   # --- 6. Save Final Outputs ---
   cat("\n--- Phase 4: Saving final results ---\n")
   
   # Select and reorder columns for clarity
   final_results <- results %>%
+    mutate(fasta_header = paste(str_remove(original_filename, "\\.fold$"), type, sep = "_")) %>%
     mutate(
       target_mut_region = map_chr(window, format_window_string),
     ) %>%
-    rename(
+    dplyr::rename(
       mutant_id = fasta_header,
       parent_seq = sequence,
       mutant_seq = seq,
