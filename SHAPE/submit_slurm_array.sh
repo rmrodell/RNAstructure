@@ -143,6 +143,6 @@ sbatch \
     --mail-user="$MAIL_USER" \
     --output="${SLURM_LOGS_DIR}/job_%A_task_%a.out" \
     --error="${SLURM_LOGS_DIR}/job_%A_task_%a.err" \
-    "$PIPELINE_SCRIPT_PATH" "$SAMPLE_MAP_FILE" "$TOP_LEVEL_OUTPUT_DIR"
+    "$PIPELINE_SCRIPT_PATH" "$SAMPLE_MAP_FILE" "$BAM_SOURCE_DIR" "$TOP_LEVEL_OUTPUT_DIR"
 
 echo "--- Job array submitted successfully! ---"
