@@ -1,50 +1,126 @@
 #!/bin/bash
 #
-# SLURM job array submitter for the SHAPE-MaP pipeline.
-# This script submits a single array job, where each task processes one sample.
+# SLURM job array submitter for a general bioinformatics pipeline.
+# This script takes all configuration from the command line, making it highly reusable.
 #
 
-# Stop the script if any command fails
-set -e
-set -o pipefail
+# Stop the script if any command fails or if an unset variable is used
+set -eu -o pipefail
 
 ################################################################################
-### USER-CONFIGURABLE VARIABLES                                            ###
+### SCRIPT USAGE FUNCTION                                                  ###
 ################################################################################
 
-# --- SLURM JOB RESOURCE CONFIGURATION (for EACH task in the array) ---
+# Function to display help message
+usage() {
+    echo "Usage: $0 -u <email> -s <script> -a <map> -b <bam_dir> -o <out_dir> [OPTIONS]..."
+    echo ""
+    echo "Submits a SLURM job array where each task processes one sample from the SAMPLE_MAP."
+    echo ""
+    echo "Required Arguments:"
+    echo "  -u, --mail-user <email>      Email for SLURM notifications."
+    echo "  -s, --script-path <path>     Path to the executable pipeline script (e.g., process_single_file.sh)."
+    echo "  -a, --sample-map <path>      Path to the text file listing samples, one per line."
+    echo "  -b, --bam-dir <path>         Path to the directory containing the source BAM files."
+    echo "  -o, --output-dir <path>      Top-level directory where all outputs will be created."
+    echo ""
+    echo "Optional Job Resource Arguments (with defaults):"
+    echo "  -c, --cpu <int>              CPUs per job task. (Default: 16)"
+    echo "  -m, --mem <string>           Memory per job task (e.g., 32G). (Default: 32G)"
+    echo "  -t, --time <string>          Time limit for each job task (e.g., 24:00:00). (Default: 24:00:00)"
+    echo "  -p, --partition <string>     SLURM partition to use. (Default: normal)"
+    echo "  -h, --help                   Display this help message and exit."
+    echo ""
+    echo "Example:"
+    echo "  $0 \\"
+    echo "      --mail-user me@stanford.edu \\"
+    echo "      --script-path /path/to/process_single_file.sh \\"
+    echo "      --sample-map /path/to/my_samples.txt \\"
+    echo "      --bam-dir /path/to/bam_files/ \\"
+    echo "      --output-dir /path/to/my_output_project/ \\"
+    echo "      --cpu 8 --mem 16G"
+}
+
+################################################################################
+### DEFAULT SETTINGS & ARGUMENT PARSING                                    ###
+################################################################################
+
+# --- Set Default Optional SLURM Job Resource Configuration ---
 CPU_PER_JOB=16
 MEM_PER_JOB="32G"
 TIME_LIMIT="24:00:00"
 PARTITION="normal"
-MAIL_USER="rodell@stanford.edu" # <-- IMPORTANT: SET YOUR EMAIL
 
-# --- PATH CONFIGURATION ---
-BAM_SOURCE_DIR="/scratch/groups/nicolemm/rodell/basecalling/InVitro_SHAPE_Rep2_20250731/final_results/"
-SAMPLE_MAP_FILE="/scratch/groups/nicolemm/rodell/SHAPE/InVitro_Rep2_20250731/samples.txt"
-TOP_LEVEL_OUTPUT_DIR="/scratch/groups/nicolemm/rodell/SHAPE/InVitro_Rep2_20250731"
-PIPELINE_SCRIPT_PATH="/scratch/groups/nicolemm/rodell/SHAPE/process_single_file.sh"
+# --- Initialize Required Argument Variables ---
+MAIL_USER=""
+PIPELINE_SCRIPT_PATH=""
+SAMPLE_MAP_FILE=""
+BAM_SOURCE_DIR=""
+TOP_LEVEL_OUTPUT_DIR=""
+
+# --- Parse All Arguments ---
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+        -u|--mail-user)         MAIL_USER="$2"; shift 2 ;;
+        -s|--script-path)       PIPELINE_SCRIPT_PATH="$2"; shift 2 ;;
+        -a|--sample-map)        SAMPLE_MAP_FILE="$2"; shift 2 ;;
+        -b|--bam-dir)           BAM_SOURCE_DIR="$2"; shift 2 ;;
+        -o|--output-dir)        TOP_LEVEL_OUTPUT_DIR="$2"; shift 2 ;;
+        -c|--cpu)               CPU_PER_JOB="$2"; shift 2 ;;
+        -m|--mem)               MEM_PER_JOB="$2"; shift 2 ;;
+        -t|--time)              TIME_LIMIT="$2"; shift 2 ;;
+        -p|--partition)         PARTITION="$2"; shift 2 ;;
+        -h|--help)              usage; exit 0 ;;
+        *)                      echo "Error: Unknown option '$1'"; usage; exit 1 ;;
+    esac
+done
+
+# --- Final Input Validation ---
+# Check for missing required arguments
+missing_args=()
+if [ -z "$MAIL_USER" ]; then missing_args+=("--mail-user"); fi
+if [ -z "$PIPELINE_SCRIPT_PATH" ]; then missing_args+=("--script-path"); fi
+if [ -z "$SAMPLE_MAP_FILE" ]; then missing_args+=("--sample-map"); fi
+if [ -z "$BAM_SOURCE_DIR" ]; then missing_args+=("--bam-dir"); fi
+if [ -z "$TOP_LEVEL_OUTPUT_DIR" ]; then missing_args+=("--output-dir"); fi
+
+if [ ${#missing_args[@]} -gt 0 ]; then
+    echo "Error: The following required arguments were not provided:"
+    for arg in "${missing_args[@]}"; do
+        echo "  $arg"
+    done
+    usage
+    exit 1
+fi
+
+# Check that paths/files actually exist
+if [ ! -x "$PIPELINE_SCRIPT_PATH" ]; then echo "Error: Pipeline script '$PIPELINE_SCRIPT_PATH' not found or is not executable."; exit 1; fi
+if [ ! -f "$SAMPLE_MAP_FILE" ]; then echo "Error: Sample map file '$SAMPLE_MAP_FILE' not found."; exit 1; fi
+if [ ! -d "$BAM_SOURCE_DIR" ]; then echo "Error: BAM source directory '$BAM_SOURCE_DIR' not found."; exit 1; fi
+
 
 ################################################################################
 ### BATCH SUBMISSION LOGIC                                                 ###
 ################################################################################
 
 echo "--- Preparing SLURM Job Array Submission ---"
+echo "  CPUs per Task:    $CPU_PER_JOB"
+echo "  Memory per Task:  $MEM_PER_JOB"
+echo "  Time Limit:       $TIME_LIMIT"
+echo "  Partition:        $PARTITION"
+echo "  Notify Email:     $MAIL_USER"
+echo "  Pipeline Script:  $PIPELINE_SCRIPT_PATH"
+echo "  Sample Map:       $SAMPLE_MAP_FILE"
+echo "  BAM Source Dir:   $BAM_SOURCE_DIR"
+echo "  Output Dir:       $TOP_LEVEL_OUTPUT_DIR"
+echo "---------------------------------------------"
 
-# Define and create directories
-FINAL_FASTQ_DIR="${TOP_LEVEL_OUTPUT_DIR}/final_deduplicated_fastq"
+# Define and create output directories
 SLURM_LOGS_DIR="${TOP_LEVEL_OUTPUT_DIR}/slurm_logs"
-mkdir -p "$FINAL_FASTQ_DIR"
 mkdir -p "$SLURM_LOGS_DIR"
 
-echo "All outputs will be placed within: $TOP_LEVEL_OUTPUT_DIR"
 echo "SLURM output/error logs will be saved in: $SLURM_LOGS_DIR"
-
-# Check if the pipeline script is executable
-if [ ! -x "$PIPELINE_SCRIPT_PATH" ]; then
-    echo "Error: Pipeline script '$PIPELINE_SCRIPT_PATH' not found or not executable."
-    exit 1
-fi
 
 # Determine the number of jobs for the array
 N_JOBS=$(wc -l < "$SAMPLE_MAP_FILE")
@@ -67,6 +143,6 @@ sbatch \
     --mail-user="$MAIL_USER" \
     --output="${SLURM_LOGS_DIR}/job_%A_task_%a.out" \
     --error="${SLURM_LOGS_DIR}/job_%A_task_%a.err" \
-    "$PIPELINE_SCRIPT_PATH" "$SAMPLE_MAP_FILE" "$BAM_SOURCE_DIR" "$TOP_LEVEL_OUTPUT_DIR"
+    "$PIPELINE_SCRIPT_PATH" "$SAMPLE_MAP_FILE" "$TOP_LEVEL_OUTPUT_DIR"
 
 echo "--- Job array submitted successfully! ---"
