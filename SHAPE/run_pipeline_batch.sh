@@ -88,7 +88,7 @@ FINAL_FASTQ_DIR="${TOP_LEVEL_OUTPUT_DIR}/final_deduplicated_fastq"
 
 # Ensure the main output directory and the final results subdirectory exist
 mkdir -p "$TOP_LEVEL_OUTPUT_DIR"
-mkdir -p "$FINAL_OUTPUT_DIR"
+mkdir -p "FINAL_FASTQ_DIR"
 echo "All outputs will be placed within: $TOP_LEVEL_OUTPUT_DIR"
 echo "Final FASTQ files will be copied to: $FINAL_FASTQ_DIR"
 
@@ -129,7 +129,7 @@ while IFS=':' read -r sample_name barcode || [[ -n "$barcode" ]]; do
     echo "  - Launching pipeline..."
 
     # Execute the main pipeline script, passing the required information as arguments
-    "$PIPELINE_SCRIPT" "$BAM_FILE_PATH" "$sample_name" "$TOP_LEVEL_OUTPUT_DIR" "$FINAL_FASTQ_DIR"
+    "$PIPELINE_SCRIPT" "$BAM_FILE_PATH" "$sample_name" "$TOP_LEVEL_OUTPUT_DIR"
 
     echo "  - Finished processing for sample: $sample_name"
 
