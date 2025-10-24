@@ -4,16 +4,38 @@
 # This script is designed to be called as a SLURM array task.
 #
 
-# --- 1. SLURM Array Task Setup ---
-if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
-    echo "Error: This script must be run as a SLURM array job."
+# --- 0. Validate Input Arguments ---
+# Check if the correct number of arguments (3) was provided.
+if [ "$#" -ne 3 ]; then
+    echo "Error: Incorrect number of arguments provided."
+    echo ""
+    echo "Usage: $0 <sample_map_file> <bam_source_dir> <top_level_output_dir>"
+    echo ""
+    echo "  <sample_map_file>        : Path to the file mapping sample IDs to barcodes."
+    echo "  <bam_source_dir>         : Directory containing the input BAM files."
+    echo "  <top_level_output_dir>   : The root directory where all output will be stored."
     exit 1
 fi
+
 
 # Arguments passed from sbatch:
 SAMPLE_MAP_FILE="$1"
 BAM_SOURCE_DIR="$2"
 TOP_LEVEL_OUTPUT_DIR="$3"
+
+# Echo the assigned arguments to the log for traceability
+echo "--- Script Arguments Received ---"
+echo "Sample Map File:          ${SAMPLE_MAP_FILE}"
+echo "BAM Source Directory:     ${BAM_SOURCE_DIR}"
+echo "Top-Level Output Dir:     ${TOP_LEVEL_OUTPUT_DIR}"
+echo "---------------------------------"
+echo "" # Add a blank line for readability
+
+# --- 1. SLURM Array Task Setup ---
+if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
+    echo "Error: This script must be run as a SLURM array job."
+    exit 1
+fi
 
 # Read the line from the sample map corresponding to the task ID
 TASK_INFO=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$SAMPLE_MAP_FILE")
@@ -89,7 +111,7 @@ FINAL_DIR="${PROJECT_DIR}/final"
 LOGS_DIR="${PROJECT_DIR}/logs"
 REPORTS_DIR="${PROJECT_DIR}/reports"
 
-mkdir -p "$TMP_DIR" "$FINAL_DIR" "$LOGS_DIR" "$REPORTS_DIR" "FINAL_COMMON_DIR"
+mkdir -p "$TMP_DIR" "$FINAL_DIR" "$LOGS_DIR" "$REPORTS_DIR" "$FINAL_COMMON_DIR"
 
 METRICS_FILE="${REPORTS_DIR}/${SAMPLE_ID}.run_metrics.tsv"; PIPELINE_LOG="${LOGS_DIR}/${SAMPLE_ID}.pipeline_run.log"
 exec > >(tee -a "${PIPELINE_LOG}") 2>&1
