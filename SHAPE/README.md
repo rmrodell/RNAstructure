@@ -34,7 +34,7 @@ bash $HOME/RNAstructure/SHAPE/submit_slurm_array.sh \
     --sample-map /scratch/groups/nicolemm/rodell/SHAPE_InCell/barcodes.txt \
     --bam-dir /scratch/groups/nicolemm/rodell/SHAPE_InCell/merged_bams \
     --output-dir /scratch/groups/nicolemm/rodell/SHAPE_InCell/combined
-    ```
+```
 
 The barcodes file should be formatted as follows:
 
