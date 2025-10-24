@@ -8,10 +8,10 @@ import time
 # --- Configuration ---
 VARNA_JAR_PATH = os.path.expanduser('/home/users/rodell/varna/VARNAv3-93.jar')
 
-INPUT_FILE_PATH = '/scratch/users/rodell/20251014_pool2/RNAfold_fold_summary.csv'  # <--- UPDATE THIS TO YOUR FILENAME
+INPUT_FILE_PATH = '/scratch/groups/nicolemm/rodell/pool2_20251016/RNAfold_fold_summary.csv'  # <--- UPDATE THIS TO YOUR FILENAME
 HIGHLIGHT_POSITION = 66
 
-OUTPUT_DIR = "varna_structures_svg"
+OUTPUT_DIR = "noadapters_varna_structures_svg"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 print("--- VARNA High-Throughput Structure Generation ---")
