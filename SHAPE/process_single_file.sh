@@ -89,7 +89,7 @@ FINAL_DIR="${PROJECT_DIR}/final"
 LOGS_DIR="${PROJECT_DIR}/logs"
 REPORTS_DIR="${PROJECT_DIR}/reports"
 
-mkdir -p "$TMP_DIR" "$FINAL_DIR" "$LOGS_DIR" "$REPORTS_DIR"
+mkdir -p "$TMP_DIR" "$FINAL_DIR" "$LOGS_DIR" "$REPORTS_DIR" "FINAL_COMMON_DIR"
 
 METRICS_FILE="${REPORTS_DIR}/${SAMPLE_ID}.run_metrics.tsv"; PIPELINE_LOG="${LOGS_DIR}/${SAMPLE_ID}.pipeline_run.log"
 exec > >(tee -a "${PIPELINE_LOG}") 2>&1
