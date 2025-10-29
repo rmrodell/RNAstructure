@@ -44,3 +44,15 @@ HEK293T_DMSO_Rep1:barcode76
 
 This will submit an individual job for each bam file in the bam directory.
 The final deduplicated fastq will be located in a directory inside the output directory.
+
+## Resume Failed Processing
+
+The deduplication step is very long and will often time out if there are a lot of reads.
+To pick back up from where it stopped for a single sample, use resume_processing_pipeline.sh as follows:
+
+```bash
+bash $HOME/RNAstructure/SHAPE/resume_processing_pipeline.sh $SAMPLE_ID $PROJECT_DIR $FINAL_COMMON_DIR
+```
+
+Submit this within an SBATCH script with increased time and memory, but more cores are not necessary 
+and can even be reduced.
