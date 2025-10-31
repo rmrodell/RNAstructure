@@ -125,6 +125,52 @@ echo "===================================================="
 # The script will loop through all .fasta files and run SHAPE-Mapper.
 # =========================================================================
 
+# # Find all .fasta files in the FASTA_DIR and loop through them
+# for REF_FASTA in "${FASTA_DIR}"/*.fasta; do
+
+#     # --- Dynamic Name Generation ---
+#     # Extract the core chunk name (e.g., "pool1_chunk_1") from the full path
+#     CHUNK_FILENAME=$(basename "${REF_FASTA}" .fasta)
+#     # Extract just the chunk identifier (e.g., "chunk_1")
+#     CHUNK_ID=$(echo "${CHUNK_FILENAME}" | cut -d'_' -f2,3)
+#     # Create a unique sample name for this specific chunk
+#     SAMPLE_NAME="${SAMPLE_BASE_NAME}_${CHUNK_ID}" # e.g., "Rep1_NoPus_chunk_1"
+#     # Define unique output and log paths for this chunk
+#     OUTPUT_DIR="${BASE_OUTPUT_DIR}/${SAMPLE_NAME}"
+#     LOG_FILE="${LOG_DIR}/${SAMPLE_NAME}_shapemapper.log"
+
+#     # --- Run Analysis for the Current Chunk ---
+#     echo "Processing chunk: ${CHUNK_FILENAME}"
+#     echo " -> Sample Name: ${SAMPLE_NAME}"
+#     echo " -> Output will be in: ${OUTPUT_DIR}"
+#     echo " -> Log file will be: ${LOG_FILE}"
+
+#     # Ensure the specific output directory for this chunk exists
+#     mkdir -p "${OUTPUT_DIR}"
+
+#     # Execute the SHAPE-Mapper command with dynamically generated names
+#     ${SHAPEMAPPER_EXEC} \
+#         --name "${SAMPLE_NAME}" \
+#         --target "${REF_FASTA}" \
+#         --out "${OUTPUT_DIR}" \
+#         --log "${LOG_FILE}" \
+#         --modified --U "${MODIFIED_FQ}" \
+#         --untreated --U "${UNTREATED_FQ}" \
+#         --overwrite \
+#         --nproc "${N_PROCS}" \
+#         --min-depth 1000 \
+#         --window-to-trim 10 \
+#         --per-read-histograms \
+#         --indiv-norm \
+#         --output-counted-mutations \
+#         --output-aligned-reads
+
+#     echo "Finished processing chunk: ${CHUNK_FILENAME}"
+#     echo "----------------------------------------------------"
+
+# done
+
+
 # Find all .fa and .fasta files and loop through them
 shopt -s nullglob
 FASTA_FILES=("${FASTA_DIR}"/*.{fa,fasta})
