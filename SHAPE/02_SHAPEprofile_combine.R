@@ -98,7 +98,6 @@ for (dir in target_dirs) {
 
     # Append the data frame to the list
     all_data_frames[[length(all_data_frames) + 1]] <- df
-    cat("Appended data from file:", df_file_name, "\n")  # Debug-Trace
   }
 }
 
