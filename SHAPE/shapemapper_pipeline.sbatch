@@ -140,14 +140,18 @@ process_replicate() {
     echo "Found FASTQs: Untreated=${untreated_fq}, Modified=${modified_fq}"
 
     echo "[${rep_name}] Step 1: Running SHAPE-Mapper..."
-    bash "${SHAPE_SCRIPT_DIR}/01_run_shapemapper.sh" -m "$modified_fq" -u "$untreated_fq" -r "$REF_FASTA_DIR" -n "$rep_name" -o "$SHAPEMAPPER_OUT_DIR"
+    bash "${SHAPE_SCRIPT_DIR}/run_shapemapper.sh" "$modified_fq" "$untreated_fq" "$rep_name" "$SHAPEMAPPER_OUT_DIR"
 
     echo "[${rep_name}] Step 2: Combining SHAPE profiles..."
     Rscript "${SHAPE_SCRIPT_DIR}/02_SHAPEprofile_combine.R" --dir "$SHAPEMAPPER_OUT_DIR" --pattern "${rep_name}_chunk_" --outfile "${SAMPLE_OUT_DIR}/${rep_name}_profile.txt"
 
     echo "[${rep_name}] Step 3: Extracting poor quality RNA list..."
-    bash "${SHAPE_SCRIPT_DIR}/03_extract_poor_quality_rnas.sh" --log-file "${SHAPEMAPPER_OUT_DIR}/logs/${rep_name}_batch_run.log" --outfile "${SAMPLE_OUT_DIR}/${rep_name}_poor_quality_rna.txt"
-
+    # bash "${SHAPE_SCRIPT_DIR}/03_extract_poor_quality_rnas.sh" --log-file "${SHAPEMAPPER_OUT_DIR}/logs/${rep_name}_batch_run.log" --outfile "${SAMPLE_OUT_DIR}/${rep_name}_poor_quality_rna.txt"
+    grep "possible poor quality reactivity profiles" "${SHAPEMAPPER_OUT_DIR}/logs/${rep_name}_chunk_"*.log | \
+    awk -F':' '{sub(/^[ ]+/, "", $NF); print $NF}' | \
+    awk '{gsub(/, /,"\n"); print}' | \
+    sort -u > "${SAMPLE_OUT_DIR}/${rep_name}_poor_quality_rna.txt"
+    
     echo "[${rep_name}] Step 4: Annotating profiles..."
     Rscript "${SHAPE_SCRIPT_DIR}/04_SHAPE_annotate_profiles.R" --profile "${SAMPLE_OUT_DIR}/${rep_name}_profile.txt" --list "${SAMPLE_OUT_DIR}/${rep_name}_poor_quality_rna.txt" --outfile "${SAMPLE_OUT_DIR}/${rep_name}_profile_annotated.txt"
 
