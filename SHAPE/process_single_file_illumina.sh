@@ -200,6 +200,7 @@ end_time=$(date +%s); log_message "Step 3 finished. Duration: $(format_duration 
 log_message "Step 4: Converting SAM to sorted BAM..."
 start_time=$(date +%s)
 samtools view -@ "$THREADS" -b "$MAPPED_SAM" | samtools sort -@ "$THREADS" -o "$MAPPED_BAM"
+samtools index "$MAPPED_BAM"
 track_metrics "4_Sorted_BAM" "$MAPPED_BAM"
 end_time=$(date +%s); log_message "Step 4 finished. Duration: $(format_duration $((end_time - start_time)))"
 
