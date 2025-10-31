@@ -146,6 +146,7 @@ for REF_FASTA in "${FASTA_FILES[@]}"; do
     CHUNK_ID=$(echo "${CHUNK_FILENAME}" | cut -d'_' -f2,3) # Assumes 'pool_chunk_id' format
     SAMPLE_NAME="${SAMPLE_BASE_NAME}_${CHUNK_ID}"
     OUTPUT_SUBDIR="${BASE_OUTPUT_DIR}/${SAMPLE_NAME}"
+    CHUNK_LOG_FILE="${OUTPUT_SUBDIR}/${SAMPLE_NAME}_shapemapper.log"
 
     # --- Run Analysis for the Current Chunk ---
     echo "----------------------------------------------------"
@@ -162,6 +163,7 @@ for REF_FASTA in "${FASTA_FILES[@]}"; do
         --out "${OUTPUT_SUBDIR}" \
         --modified --U "${MODIFIED_FQ}" \
         --untreated --U "${UNTREATED_FQ}" \
+        --log "${CHUNK_LOG_FILE}" \
         --overwrite \
         --nproc "${N_PROCS}" \
         --min-depth 1000 \
