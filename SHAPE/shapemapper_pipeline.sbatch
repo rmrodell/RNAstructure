@@ -186,7 +186,7 @@ bash "${SHAPE_SCRIPT_DIR}/06_SHAPEinformed_RNAfold.sh" -f "$REF_RNAFOLD_FASTA" -
 
 # --- Step 7: Extract RNAfold Summaries ---
 echo "Step 7a: Extracting pairing probabilities..."
-Rscript "${RNASTRUCTURE_DIR}/extract_pairing_probab.R" --indir "$RNAFOLD_OUT_DIR" --outfile "${SAMPLE_OUT_DIR}/${SAMPLE_NAME}_pairing_probabilities.csv" --max-len 130 # Adjust if needed
+Rscript "${RNASTRUCTURE_DIR}/extract_pairing_prob.R" --indir "$RNAFOLD_OUT_DIR" --outfile "${SAMPLE_OUT_DIR}/${SAMPLE_NAME}_pairing_probabilities.csv" --max-len 130 # Adjust if needed
 
 echo "Step 7b: Extracting fold summaries..."
 Rscript "${RNASTRUCTURE_DIR}/fold_summary.R" --indir "$RNAFOLD_OUT_DIR" --outfile "${SAMPLE_OUT_DIR}/${SAMPLE_NAME}_rnafold_summary.csv"
