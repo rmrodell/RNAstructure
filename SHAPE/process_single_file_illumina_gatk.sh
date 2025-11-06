@@ -88,7 +88,7 @@ if [ ! -f "$RAW_R2" ]; then echo "Error: R2 file not found: $RAW_R2"; exit 1; fi
 
 # --- 2. Load Modules & Define Variables ---
 ml biology py-cutadapt/1.18_py36 samtools bowtie2/2.3.4.1 gatk/4.6.0.0
-ml python/3.6.1
+ml python/3.6.1 java/17.0.4
 
 POOL_SENSE_ADAPTER_3PRIME="CACTCGGGCACCAAGGAC"
 UMI_PATTERN="NNNNNNNNNN"
