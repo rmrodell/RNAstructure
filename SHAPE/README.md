@@ -3,7 +3,7 @@
 Start from a bam file labeled with a barcode from Nanopore basecalling outputs,
 ideally with super-high-accuracy basecalling.
 
-The pipeline (process_single_file.sh) goes through the following steps:
+The pipeline (SHAPE_trim_map_dedup_mpra.sh) goes through the following steps:
 1. Convert bam to fastq, renaming from barcode in the process.
 2. Trim Nanopore adapters from the fastq in sense and antisense directions. 
 3. Reverse complement the antisense to unify orientation of reads.
@@ -15,7 +15,6 @@ The pipeline (process_single_file.sh) goes through the following steps:
 9. Convert to fastq for input into shapemapper
 
 The following variables are hardcoded into process_single_file.sh:
-- BOWTIE2_INDEX="/home/groups/nicolemm/rodell/pool1/pool1_bowtie_index/pool1_bowtie2"
 - SENSE_ADAPTER_5PRIME="TTTCTGTTGGTGCTGATATTGCG"
 - SENSE_ADAPTER_3PRIME="GAAGATAGAGCGACAGGCAAGT"
 - ANTISENSE_ADAPTER_5PRIME="ACTTGCCTGTCGCTCTATCTTC"
@@ -30,10 +29,11 @@ Example command:
 ```bash
 bash $HOME/RNAstructure/SHAPE/submit_slurm_array.sh \
     --mail-user "rodell@stanford.edu" \
-    --script-path $HOME/RNAstructure/SHAPE/process_single_file.sh \
-    --sample-map /scratch/groups/nicolemm/rodell/SHAPE_InCell/barcodes.txt \
-    --bam-dir /scratch/groups/nicolemm/rodell/SHAPE_InCell/merged_bams \
-    --output-dir /scratch/groups/nicolemm/rodell/SHAPE_InCell/combined
+    --script-path $HOME/RNAstructure/SHAPE/SHAPE_trim_map_dedup_mpra.sh \
+    --map-file /scratch/groups/nicolemm/rodell/SHAPE_InCell/barcodes.txt \
+    --input-dir /scratch/groups/nicolemm/rodell/SHAPE_InCell/merged_bams \
+    --output-dir /scratch/groups/nicolemm/rodell/SHAPE_InCell/combined \
+    --bowtie-index /home/groups/nicolemm/rodell/pool1/pool1_bowtie_index/pool1_bowtie_index
 ```
 
 The barcodes file should be formatted as follows:

@@ -13,16 +13,17 @@ set -eu -o pipefail
 
 # Function to display help message
 usage() {
-    echo "Usage: $0 -u <email> -s <script> -a <map> -b <bam_dir> -o <out_dir> [OPTIONS]..."
+    echo "Usage: $0 -u <email> -s <script> -a <map> -i <input_dir> -o <out_dir> -b <bowtie_index> [OPTIONS]..."
     echo ""
     echo "Submits a SLURM job array where each task processes one sample from the SAMPLE_MAP."
     echo ""
     echo "Required Arguments:"
     echo "  -u, --mail-user <email>      Email for SLURM notifications."
     echo "  -s, --script-path <path>     Path to the executable pipeline script (e.g., process_single_file.sh)."
-    echo "  -a, --sample-map <path>      Path to the text file listing samples, one per line."
-    echo "  -b, --bam-dir <path>         Path to the directory containing the source BAM files."
+    echo "  -a, --map-file <path>      Path to the text file listing samples, one per line."
+    echo "  -i, --input-dir <path>         Path to the directory containing the source BAM files."
     echo "  -o, --output-dir <path>      Top-level directory where all outputs will be created."
+    echo "  -b, --bowtie-index <path>    Path and base name for the Bowtie2 index."
     echo ""
     echo "Optional Job Resource Arguments (with defaults):"
     echo "  -c, --cpu <int>              CPUs per job task. (Default: 16)"
@@ -36,8 +37,9 @@ usage() {
     echo "      --mail-user me@stanford.edu \\"
     echo "      --script-path /path/to/process_single_file.sh \\"
     echo "      --sample-map /path/to/my_samples.txt \\"
-    echo "      --bam-dir /path/to/bam_files/ \\"
+    echo "      --input-dir /path/to/bam_files/ \\"
     echo "      --output-dir /path/to/my_output_project/ \\"
+    echo "      --bowtie-index /path/to/bowtie_indices/my_index \\"
     echo "      --cpu 8 --mem 16G"
 }
 
@@ -57,6 +59,7 @@ PIPELINE_SCRIPT_PATH=""
 SAMPLE_MAP_FILE=""
 BAM_SOURCE_DIR=""
 TOP_LEVEL_OUTPUT_DIR=""
+BOWTIE_INDEX_PATH=""
 
 # --- Parse All Arguments ---
 while [[ $# -gt 0 ]]; do
@@ -64,9 +67,10 @@ while [[ $# -gt 0 ]]; do
     case $key in
         -u|--mail-user)         MAIL_USER="$2"; shift 2 ;;
         -s|--script-path)       PIPELINE_SCRIPT_PATH="$2"; shift 2 ;;
-        -a|--sample-map)        SAMPLE_MAP_FILE="$2"; shift 2 ;;
-        -b|--bam-dir)           BAM_SOURCE_DIR="$2"; shift 2 ;;
+        -a|--map-file)          SAMPLE_MAP_FILE="$2"; shift 2 ;;
+        -i|--input-dir)         BAM_SOURCE_DIR="$2"; shift 2 ;;
         -o|--output-dir)        TOP_LEVEL_OUTPUT_DIR="$2"; shift 2 ;;
+        -b|--bowtie-index)      BOWTIE_INDEX_PATH="$2"; shift 2 ;;
         -c|--cpu)               CPU_PER_JOB="$2"; shift 2 ;;
         -m|--mem)               MEM_PER_JOB="$2"; shift 2 ;;
         -t|--time)              TIME_LIMIT="$2"; shift 2 ;;
@@ -81,9 +85,10 @@ done
 missing_args=()
 if [ -z "$MAIL_USER" ]; then missing_args+=("--mail-user"); fi
 if [ -z "$PIPELINE_SCRIPT_PATH" ]; then missing_args+=("--script-path"); fi
-if [ -z "$SAMPLE_MAP_FILE" ]; then missing_args+=("--sample-map"); fi
-if [ -z "$BAM_SOURCE_DIR" ]; then missing_args+=("--bam-dir"); fi
+if [ -z "$SAMPLE_MAP_FILE" ]; then missing_args+=("--map-file"); fi
+if [ -z "$BAM_SOURCE_DIR" ]; then missing_args+=("--input-dir"); fi
 if [ -z "$TOP_LEVEL_OUTPUT_DIR" ]; then missing_args+=("--output-dir"); fi
+if [ -z "$BOWTIE_INDEX_PATH" ]; then missing_args+=("--bowtie-index"); fi
 
 if [ ${#missing_args[@]} -gt 0 ]; then
     echo "Error: The following required arguments were not provided:"
@@ -98,6 +103,7 @@ fi
 if [ ! -x "$PIPELINE_SCRIPT_PATH" ]; then echo "Error: Pipeline script '$PIPELINE_SCRIPT_PATH' not found or is not executable."; exit 1; fi
 if [ ! -f "$SAMPLE_MAP_FILE" ]; then echo "Error: Sample map file '$SAMPLE_MAP_FILE' not found."; exit 1; fi
 if [ ! -d "$BAM_SOURCE_DIR" ]; then echo "Error: BAM source directory '$BAM_SOURCE_DIR' not found."; exit 1; fi
+if [ ! -f "${BOWTIE_INDEX_PATH}.1.bt2" ]; then echo "Error: Bowtie2 index file '${BOWTIE_INDEX_PATH}.1.bt2' not found."; exit 1; fi
 
 
 ################################################################################
@@ -114,6 +120,7 @@ echo "  Pipeline Script:  $PIPELINE_SCRIPT_PATH"
 echo "  Sample Map:       $SAMPLE_MAP_FILE"
 echo "  BAM Source Dir:   $BAM_SOURCE_DIR"
 echo "  Output Dir:       $TOP_LEVEL_OUTPUT_DIR"
+echo "  Bowtie2 Index:    $BOWTIE_INDEX_PATH"
 echo "---------------------------------------------"
 
 # Define and create output directories
@@ -143,6 +150,10 @@ sbatch \
     --mail-user="$MAIL_USER" \
     --output="${SLURM_LOGS_DIR}/job_%A_task_%a.out" \
     --error="${SLURM_LOGS_DIR}/job_%A_task_%a.err" \
-    "$PIPELINE_SCRIPT_PATH" "$SAMPLE_MAP_FILE" "$BAM_SOURCE_DIR" "$TOP_LEVEL_OUTPUT_DIR"
+    --wrap="\"$PIPELINE_SCRIPT_PATH\" \
+        --map-file \"$SAMPLE_MAP_FILE\" \
+        --input-dir \"$BAM_SOURCE_DIR\" \
+        --output-dir \"$TOP_LEVEL_OUTPUT_DIR\" \
+        --bowtie-index \"$BOWTIE_INDEX_PATH\""
 
 echo "--- Job array submitted successfully! ---"
