@@ -9,20 +9,20 @@
 
 # Function to display usage information
 usage() {
-    echo "Usage: $0 -a <map_file> -i <input_dir> -o <output_dir> -b <bowtie_index>"
+    echo "Usage: $0 -a <map-file> -i <input-dir> -o <output-dir> -b <bowtie-index>"
     echo ""
     echo "Options:"
-    echo "  -a, --map_file <file>        Path to the file mapping sample IDs to barcodes."
-    echo "  -i, --input_dir <dir>        Directory containing the input BAM files."
-    echo "  -o, --output_dir <dir>       The root directory where all output will be stored."
-    echo "  -b, --bowtie_index <path>    Path and base name for the Bowtie2 index."
+    echo "  -a, --map-file <file>        Path to the file mapping sample IDs to barcodes."
+    echo "  -i, --input-dir <dir>        Directory containing the input BAM files."
+    echo "  -o, --output-dir <dir>       The root directory where all output will be stored."
+    echo "  -b, --bowtie-index <path>    Path and base name for the Bowtie2 index."
     echo "  -h, --help                   Display this help message."
     exit 1
 }
 
 # Define short and long options
 SHORT_OPTS="a:i:o:b:h"
-LONG_OPTS="map_file:,input_dir:,output_dir:,bowtie_index:,help"
+LONG_OPTS="map-file:,input-dir:,output-dir:,bowtie-index:,help"
 
 # Parse the options using getopt
 PARSED_OPTS=$(getopt -o "$SHORT_OPTS" --long "$LONG_OPTS" -n "$0" -- "$@")
@@ -39,10 +39,10 @@ eval set -- "$PARSED_OPTS"
 # Loop through the parsed options to assign variables
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -a|--map_file)    SAMPLE_MAP_FILE="$2"; shift 2 ;;
-        -i|--input_dir)   BAM_SOURCE_DIR="$2"; shift 2 ;;
-        -o|--output_dir)  TOP_LEVEL_OUTPUT_DIR="$2"; shift 2 ;;
-        -b|--bowtie_index) BOWTIE2_INDEX="$2"; shift 2 ;;
+        -a|--map-file)    SAMPLE_MAP_FILE="$2"; shift 2 ;;
+        -i|--input-dir)   BAM_SOURCE_DIR="$2"; shift 2 ;;
+        -o|--output-dir)  TOP_LEVEL_OUTPUT_DIR="$2"; shift 2 ;;
+        -b|--bowtie-index) BOWTIE2_INDEX="$2"; shift 2 ;;
         -h|--help)        usage ;;
         --)               shift; break ;;
         *)                echo "Internal error processing options!" >&2; exit 1 ;;
