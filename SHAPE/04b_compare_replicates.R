@@ -62,30 +62,43 @@ generate_plot <- function(data, plot_title, filename) {
     annotate("text", x = -Inf, y = Inf, label = corr_label, hjust = -0.2, vjust = 1.5, size = 5) +
     labs(
       title = plot_title,
-      x = "Reactivity (Replicate 1)",
-      y = "Reactivity (Replicate 2)"
+      x = "SHAPE Reactivity (Replicate 1)",
+      y = "SHAPE Reactivity (Replicate 2)"
     ) +
-    theme_bw() +
+    theme_bw(base_size = 14, base_family = "sans") +
+    theme(
+      plot.title = element_text(hjust = 0.5)
+    ) +
     coord_fixed() # Ensure 1:1 aspect ratio
 
-  ggsave(filename, plot = p, width = 7, height = 7, dpi = 300)
+  ggsave(filename, plot = p, width = 5, height = 5, dpi = 300)
   cat(" -> Plot saved to:", filename, "\n")
 }
 
 # --- Generate Plots ---
+sample_name <- basename(args$out_prefix)
+
 # 1. Plot with all data
-generate_plot(merged_dt, "Replicate Comparison (All Data)", paste0(args$out_prefix, "_replicate_comparison.png"))
+generate_plot(merged_dt, paste(sample_name, "Replicate Comparison (All Data)"), paste0(args$out_prefix, "_replicate_comparison.png"))
 
 # 2. Plot with outliers removed
-# Define outliers based on residuals from the y=x line
-merged_dt[, residual := Norm_profile.rep2 - Norm_profile.rep1]
-q1 <- quantile(merged_dt$residual, 0.25)
-q3 <- quantile(merged_dt$residual, 0.75)
-iqr <- q3 - q1
-non_outlier_dt <- merged_dt[residual >= (q1 - 1.5 * iqr) & residual <= (q3 + 1.5 * iqr)]
+# Define outliers as values > 3 SD from the mean of all Norm_profile values
+all_norm_values <- c(merged_dt$Norm_profile.rep1, merged_dt$Norm_profile.rep2)
+mean_norm <- mean(all_norm_values, na.rm = TRUE)
+sd_norm <- sd(all_norm_values, na.rm = TRUE)
+
+# Define outlier bounds
+lower_bound <- mean_norm - (3 * sd_norm)
+upper_bound <- mean_norm + (3 * sd_norm)
+
+# Filter to keep rows where both values are within the non-outlier range
+non_outlier_dt <- merged_dt[
+    (Norm_profile.rep1 >= lower_bound & Norm_profile.rep1 <= upper_bound) &
+    (Norm_profile.rep2 >= lower_bound & Norm_profile.rep2 <= upper_bound)
+]
 
 if (nrow(non_outlier_dt) > 2) {
-    generate_plot(non_outlier_dt, "Replicate Comparison (Outliers Removed)", paste0(args$out_prefix, "_replicate_comparison_no_outliers.png"))
+    generate_plot(non_outlier_dt, paste(sample_name, "Replicate Comparison (Outliers Removed)"), paste0(args$out_prefix, "_replicate_comparison_no_outliers.png"))
 } else {
     cat(" -> Not enough data to generate plot with outliers removed.\n")
 }
