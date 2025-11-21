@@ -132,7 +132,7 @@ process_replicate() {
     local rep_name="$1"
     echo "--- [START] Processing Replicate: ${rep_name} ---"
 
-    map_line=$(grep "^${rep_name}" "$SAMPLE_MAP_FILE")
+    map_line=$(grep "^${rep_name}\b" "$SAMPLE_MAP_FILE")
     untreated_fq=$(echo "$map_line" | cut -f2)
     modified_fq=$(echo "$map_line" | cut -f3)
 
@@ -162,23 +162,43 @@ process_replicate() {
 # Load modules once for the entire job
 ml biology viennarna R
 
-# --- Steps 1-4a: Run in parallel for Rep1 and Rep2 ---
-process_replicate "$SAMPLE_REP1" &
-PID_REP1=$!
-process_replicate "$SAMPLE_REP2" &
-PID_REP2=$!
+# Detect if replicates exist
+REP1_EXISTS=$(grep -c "^${SAMPLE_NAME}_Rep1\b" "$SAMPLE_MAP_FILE")
+REP2_EXISTS=$(grep -c "^${SAMPLE_NAME}_Rep2\b" "$SAMPLE_MAP_FILE")
 
-echo "Waiting for replicate processing (PIDs: ${PID_REP1}, ${PID_REP2})..."
-wait $PID_REP1 $PID_REP2
-echo "All replicate processing finished."
+if [[ "$REP1_EXISTS" -eq 1 && "$REP2_EXISTS" -eq 1 ]]; then
+    # --- Replicated Workflow ---
+    echo "Detected Replicates: Running replicated workflow for ${SAMPLE_NAME}"
+    
+    SAMPLE_REP1="${SAMPLE_NAME}_Rep1"
+    SAMPLE_REP2="${SAMPLE_NAME}_Rep2"
 
-# --- Step 4b: Compare Replicates ---
-echo "Step 4b: Comparing replicate reactivities for ${SAMPLE_NAME}..."
-Rscript "${SHAPE_SCRIPT_DIR}/04b_compare_replicates.R" --rep1 "${SAMPLE_OUT_DIR}/${SAMPLE_REP1}_profile_annotated.txt" --rep2 "${SAMPLE_OUT_DIR}/${SAMPLE_REP2}_profile_annotated.txt" --out-prefix "${PLOTS_DIR}/${SAMPLE_NAME}"
+    process_replicate "$SAMPLE_REP1" &
+    PID_REP1=$!
+    process_replicate "$SAMPLE_REP2" &
+    PID_REP2=$!
+    
+    echo "Waiting for replicate processing (PIDs: ${PID_REP1}, ${PID_REP2})..."
+    wait $PID_REP1 $PID_REP2
+    echo "All replicate processing finished."
 
-# --- Step 5: Average Reactivities Across Replicates ---
-echo "Step 5: Averaging reactivities for ${SAMPLE_NAME}..."
-Rscript "${SHAPE_SCRIPT_DIR}/05_average_reactivities.R" --infiles "${SAMPLE_OUT_DIR}/${SAMPLE_REP1}_profile_annotated.txt" "${SAMPLE_OUT_DIR}/${SAMPLE_REP2}_profile_annotated.txt" --outdir "$SHAPE_DIR"
+    echo "Step 4b: Comparing replicate reactivities..."
+    Rscript "${SHAPE_SCRIPT_DIR}/04b_compare_replicates.R" --rep1 "${SAMPLE_OUT_DIR}/${SAMPLE_REP1}_profile_annotated.txt" --rep2 "${SAMPLE_OUT_DIR}/${SAMPLE_REP2}_profile_annotated.txt" --out-prefix "${PLOTS_DIR}/${SAMPLE_NAME}"
+    
+    echo "Step 5: Averaging reactivities across replicates..."
+    Rscript "${SHAPE_SCRIPT_DIR}/05_average_reactivities.R" --infiles "${SAMPLE_OUT_DIR}/${SAMPLE_REP1}_profile_annotated.txt" "${SAMPLE_OUT_DIR}/${SAMPLE_REP2}_profile_annotated.txt" --outdir "$SHAPE_DIR"
+
+else
+    # --- Single Sample Workflow ---
+    echo "No replicates detected: Running single-sample workflow for ${SAMPLE_NAME}"
+    
+    process_replicate "$SAMPLE_NAME"
+    
+    echo "Skipping Step 4b (Replicate Comparison)."
+    echo "Step 5 (single): Generating .shape files from single profile..."
+    Rscript "${SHAPE_SCRIPT_DIR}/05_average_reactivities.R" --infiles "${SAMPLE_OUT_DIR}/${SAMPLE_NAME}_profile_annotated.txt" --outdir "$SHAPE_DIR"
+fi
+
 
 # --- Step 6: SHAPE-informed RNAfold ---
 echo "Step 6: Running SHAPE-informed RNAfold for ${SAMPLE_NAME}..."
