@@ -107,6 +107,7 @@ FINAL_COMMON_DIR="${TOP_LEVEL_OUTPUT_DIR}/final_deduplicated_fastq"
 # Load modules
 ml biology py-cutadapt/1.18_py36 samtools bowtie2/2.3.4.1
 ml python/3.6.1
+ml devel java/11
 
 # Stop the script if any command fails
 set -e
@@ -182,7 +183,7 @@ MAPPED_BAM="${TMP_DIR}/${SAMPLE_ID}_mapped_sorted.bam"
 DEDUP_BAM="${FINAL_DIR}/${SAMPLE_ID}_deduplicated.bam"
 DEDUP_FASTQ="${FINAL_DIR}/${SAMPLE_ID}_deduplicated_for_shapemapper.fastq"
 BOWTIE_LOG="${LOGS_DIR}/${SAMPLE_ID}_bowtie2_mapping.log"
-DEDUP_LOG="${LOGS_DIR}/${SAMPLE_ID}_umi_tools_dedup.log"
+#DEDUP_LOG="${LOGS_DIR}/${SAMPLE_ID}_umi_tools_dedup.log"
 
 # --- 1. Convert BAM to FASTQ and Setup Read Tracking ---
 log_message "Step 1: Converting BAM to FASTQ and selecting reads for tracking..."
@@ -285,13 +286,17 @@ track_metrics "7_Sorted_BAM" "$MAPPED_BAM"
 end_time=$(date +%s); log_message "Step 7 finished. Duration: $(format_duration $((end_time - start_time)))"
 
 # --- 8. Deduplicate Reads with UMI-tools ---
-log_message "Step 8: Deduplicating reads with UMI-tools and indexing..."
+log_message "Step 8: Deduplicating reads with UMICollapse and indexing..."
 start_time=$(date +%s)
-umi_tools dedup \
-    --method directional \
-    -I "$MAPPED_BAM" \
-    -S "$DEDUP_BAM" \
-    -L "$DEDUP_LOG"
+
+$HOME/UMICollapse/umicollapse bam \
+    -i "$MAPPED_BAM" \
+    -o "$DEDUP_BAM"
+# umi_tools dedup \
+#     --method directional \
+#     -I "$MAPPED_BAM" \
+#     -S "$DEDUP_BAM" \
+#     -L "$DEDUP_LOG"
 samtools index "$DEDUP_BAM"
 track_metrics "8_Deduplicated_BAM" "$DEDUP_BAM"
 end_time=$(date +%s); log_message "Step 8 finished. Duration: $(format_duration $((end_time - start_time)))"
