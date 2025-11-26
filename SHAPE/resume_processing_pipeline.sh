@@ -32,6 +32,7 @@ echo ""
 # Load modules
 ml biology py-cutadapt/1.18_py36 samtools bowtie2/2.3.4.1
 ml python/3.6.1
+ml devel java/11
 
 # Stop the script if any command fails
 set -e
@@ -47,6 +48,21 @@ if [ -n "$SLURM_CPUS_PER_TASK" ]; then THREADS="$SLURM_CPUS_PER_TASK"; else THRE
 # Use SLURM_JOB_ID for logging consistency
 log_message() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Job:${SLURM_JOB_ID}] [${SAMPLE_ID}] $1"; }
 format_duration() { local s=$1; echo "$((s/60))m $((s%60))s"; }
+track_metrics() {
+    local step_name=$1; local file_path=$2; local count; local size;
+    if [ ! -s "$file_path" ]; then
+        echo -e "${step_name}\t${SAMPLE_ID}\t$(basename "$file_path")\t0\t0B" >> "$METRICS_FILE"; return
+    fi
+    size=$(du -h "$file_path" | cut -f1)
+    if [[ "$file_path" == *.fastq.gz || "$file_path" == *.fq.gz ]]; then
+        count=$(echo "$(zcat "$file_path" | wc -l) / 4" | bc)
+    elif [[ "$file_path" == *.bam || "$file_path" == *.sam ]]; then
+        count=$(samtools view -@ "$THREADS" -c "$file_path")
+    else
+        count="N/A"
+    fi
+    echo -e "${step_name}\t${SAMPLE_ID}\t$(basename "$file_path")\t${count}\t${size}" >> "$METRICS_FILE"
+}
 
 # --- Directory and Log File Definitions (must match original) ---
 TMP_DIR="${PROJECT_DIR}/tmp"
@@ -87,23 +103,26 @@ fi
 log_message "Prerequisite file found: ${MAPPED_BAM}"
 log_message "Skipping Steps 1-7."
 
-# --- 8. Deduplicate Reads with UMI-tools ---
-log_message "Step 8: Deduplicating reads with UMI-tools and indexing..."
+# --- 8. Deduplicate Reads with UMICollapse ---
+log_message "Step 8: Deduplicating reads with UMICollapse and indexing..."
 start_time=$(date +%s)
-umi_tools dedup \
-    --method directional \
-    -I "$MAPPED_BAM" \
-    -S "$DEDUP_BAM" \
-    -L "$DEDUP_LOG"
+$HOME/UMICollapse/umicollapse bam \
+    -i "$MAPPED_BAM" \
+    -o "$DEDUP_BAM"
+# umi_tools dedup \
+#     --method directional \
+#     -I "$MAPPED_BAM" \
+#     -S "$DEDUP_BAM" \
+#     -L "$DEDUP_LOG"
 samtools index "$DEDUP_BAM"
-# The original script's track_metrics is omitted here, as it's not essential for resumption.
-# You could add it back if you want to regenerate the metrics for this step.
+track_metrics "8_Deduplicated_BAM" "$DEDUP_BAM"
 end_time=$(date +%s); log_message "Step 8 finished. Duration: $(format_duration $((end_time - start_time)))"
 
 # --- 9. Convert Deduplicated BAM to FASTQ for SHAPE-Mapper ---
 log_message "Step 9: Converting deduplicated BAM to final FASTQ..."
 start_time=$(date +%s)
 samtools bam2fq -@ "$THREADS" "$DEDUP_BAM" > "$DEDUP_FASTQ"
+track_metrics "9_Final_Deduplicated_FASTQ" "$DEDUP_FASTQ"
 end_time=$(date +%s); log_message "Step 9 finished. Duration: $(format_duration $((end_time - start_time)))"
 
 # --- Step 10: Copy Final FASTQ to Common Output Directory ---
@@ -137,9 +156,7 @@ log_message "  - Removed: ${TMP_DIR}"
 
 log_message "--- Pipeline for ${SAMPLE_ID} finished successfully! ---"
 
-# --- Step 12: (Optional) Display Final Metrics Report ---
-# Note: This will show an incomplete report as we didn't re-run track_metrics.
-# It's left here for consistency but you can ignore its output.
+# --- Step 12: Display Final Metrics Report ---
 if [ -f "$METRICS_FILE" ]; then
     log_message "Step 12: Displaying run metrics summary for ${SAMPLE_ID}:"
     column -t -s $'\t' "$METRICS_FILE"
