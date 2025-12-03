@@ -98,7 +98,7 @@ exec &> "${LOG_FILE}"
 # =========================================================================
 
 # --- Path to the SHAPE-Mapper executable ---
-SHAPEMAPPER_EXEC="/scratch/groups/nicolemm/rodell/shapemapper2-2.3/shapemapper"
+SHAPEMAPPER_EXEC="/oak/stanford/groups/nicolemm/rodell/shapemapper2-2.3/shapemapper"
 
 # --- Resource Allocation (dynamically set by Slurm's --cpus-per-task) ---
 N_PROCS=$(nproc)

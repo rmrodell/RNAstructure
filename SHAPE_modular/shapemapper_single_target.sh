@@ -98,7 +98,7 @@ echo "[Step 2] Parsing mutations from filtered SAM files..."
 TEMP_PARSER_LOG_MOD="${OUTPUT_DIR}/temp_parser_mod.log"
 TEMP_PARSER_LOG_UN="${OUTPUT_DIR}/temp_parser_un.log"
 
-source $GROUP_SCRATCH/rodell/shapemapper2-2.3/internals/paths/bin_paths.sh
+source $OAK/shapemapper2-2.3/internals/paths/bin_paths.sh
 
 echo "  - Parsing modified sample..."
 {

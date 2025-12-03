@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# run_full_pipeline.sh
+# run_modular_pipeline.sh
 #
 # Master script to orchestrate the full SHAPE-MaP analysis pipeline for a single replicate.
 #

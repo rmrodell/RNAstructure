@@ -25,7 +25,7 @@ BASE_OUTPUT_DIR="$4"
 # =========================================================================
 
 # --- Path to the SHAPE-Mapper executable ---
-SHAPEMAPPER_EXEC="/scratch/groups/nicolemm/rodell/shapemapper2-2.3/shapemapper"
+SHAPEMAPPER_EXEC="/oak/stanford/groups/nicolemm/rodell/shapemapper2-2.3/shapemapper"
 
 # --- Input FASTA Directory (contains all the .fasta chunk files) ---
 FASTA_DIR="/home/groups/nicolemm/rodell/pool1/fasta_chunks"
