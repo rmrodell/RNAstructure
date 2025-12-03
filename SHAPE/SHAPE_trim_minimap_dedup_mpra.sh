@@ -306,7 +306,7 @@ end_time=$(date +%s); log_message "Step 9 finished. Duration: $(format_duration 
 # --- 10. Add MD tags for variant calling ---
 log_message "Step 10: Adding MD tags using samtools calmd..."
 start_time=$(date +%s)
-samtools calmd -b "$DEDUP_BAM" "$REF_FA" > "$FINAL_BAM_WITH_MD"
+samtools calmd -@ "$THREADS" -b "$DEDUP_BAM" "$REF_FA" > "$FINAL_BAM_WITH_MD"
 track_metrics "10_Final_BAM_with_MD" "$FINAL_BAM_WITH_MD"
 end_time=$(date +%s); log_message "Step 10 finished. Duration: $(format_duration $((end_time - start_time)))"
 
@@ -337,7 +337,7 @@ else
 fi
 
 # 4. Index final bam file
-samtools index "$DEST_BAM_PATH"
+samtools index -@ "$THREADS" "$DEST_BAM_PATH"
 
 # --- 12. Clean up intermediate files ---
 log_message "Step 12: Intermediate file cleanup is currently disabled."
