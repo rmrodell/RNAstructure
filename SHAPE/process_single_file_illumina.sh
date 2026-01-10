@@ -89,6 +89,7 @@ if [ ! -f "$RAW_R2" ]; then echo "Error: R2 file not found: $RAW_R2"; exit 1; fi
 # --- 2. Load Modules & Define Variables ---
 ml biology py-cutadapt/1.18_py36 samtools bowtie2/2.3.4.1
 ml python/3.6.1
+ml devel java/11
 
 POOL_SENSE_ADAPTER_3PRIME="CACTCGGGCACCAAGGAC"
 UMI_PATTERN="NNNNNNNNNN"
@@ -204,14 +205,17 @@ samtools index "$MAPPED_BAM"
 track_metrics "4_Sorted_BAM" "$MAPPED_BAM"
 end_time=$(date +%s); log_message "Step 4 finished. Duration: $(format_duration $((end_time - start_time)))"
 
-# --- Step 5: Deduplicate reads with UMI-tools ---
-log_message "Step 5: Deduplicating reads with UMI-tools and indexing..."
+# --- Step 5: Deduplicate reads with UMICollapse ---
+log_message "Step 5: Deduplicating reads with UMICollapse and indexing..."
 start_time=$(date +%s)
-umi_tools dedup \
-    --method directional \
-    -I "$MAPPED_BAM" \
-    -S "$DEDUP_BAM" \
-    -L "${LOGS_DIR}/${SAMPLE_ID}_umi_tools_dedup.log"
+$HOME/UMICollapse/umicollapse bam \
+    -i "$MAPPED_BAM" \
+    -o "$DEDUP_BAM"
+# umi_tools dedup \
+#     --method directional \
+#     -I "$MAPPED_BAM" \
+#     -S "$DEDUP_BAM" \
+#     -L "${LOGS_DIR}/${SAMPLE_ID}_umi_tools_dedup.log"
 samtools index "$DEDUP_BAM"
 track_metrics "5_Deduplicated_BAM" "$DEDUP_BAM"
 end_time=$(date +%s); log_message "Step 5 finished. Duration: $(format_duration $((end_time - start_time)))"
