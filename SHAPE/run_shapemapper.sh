@@ -2,14 +2,13 @@
 
 # =========================================================================
 # STEP 1: ARGUMENT PARSING AND VALIDATION
-# This script expects 4 command-line arguments. It no longer contains
-# hardcoded paths for samples or outputs.
+# This script expects 5 command-line arguments.
 # =========================================================================
 
 # Check if the correct number of arguments was provided
-if [ "$#" -ne 4 ]; then
+if [ "$#" -ne 5 ]; then
     echo "ERROR: Incorrect number of arguments provided."
-    echo "Usage: $0 <path_to_modified.fq> <path_to_untreated.fq> <sample_base_name> <base_output_dir>"
+    echo "Usage: $0 <path_to_modified.fq> <path_to_untreated.fq> <sample_base_name> <base_output_dir> <ref-fasta-dir>"
     exit 1
 fi
 
