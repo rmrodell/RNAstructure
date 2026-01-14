@@ -18,6 +18,7 @@ MODIFIED_FQ="$1"
 UNTREATED_FQ="$2"
 SAMPLE_BASE_NAME="$3"
 BASE_OUTPUT_DIR="$4"
+FASTA_DIR="$5"
 
 # =========================================================================
 # STEP 2: STATIC CONFIGURATION
@@ -28,7 +29,7 @@ BASE_OUTPUT_DIR="$4"
 SHAPEMAPPER_EXEC="/oak/stanford/groups/nicolemm/rodell/shapemapper2-2.3/shapemapper"
 
 # --- Input FASTA Directory (contains all the .fasta chunk files) ---
-FASTA_DIR="/home/groups/nicolemm/rodell/pool1/fasta_chunks"
+# FASTA_DIR="/home/groups/nicolemm/rodell/pool1/fasta_chunks"
 
 # --- Resource Allocation (dynamically set by Slurm's --cpus-per-task) ---
 N_PROCS=$(nproc)

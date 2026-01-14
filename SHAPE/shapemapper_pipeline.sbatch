@@ -154,7 +154,7 @@ process_replicate() {
     echo "Found FASTQs: Untreated=${untreated_fq}, Modified=${modified_fq}"
 
     echo "[${rep_name}] Step 1: Running SHAPE-Mapper..."
-    bash "${SHAPE_SCRIPT_DIR}/run_shapemapper.sh" "$modified_fq" "$untreated_fq" "$rep_name" "$SHAPEMAPPER_OUT_DIR"
+    bash "${SHAPE_SCRIPT_DIR}/run_shapemapper.sh" "$modified_fq" "$untreated_fq" "$rep_name" "$SHAPEMAPPER_OUT_DIR" "$ref-fasta-dir"
 
     echo "[${rep_name}] Step 2: Combining SHAPE profiles..."
     Rscript "${SHAPE_SCRIPT_DIR}/02_SHAPEprofile_combine.R" --dir "$SHAPEMAPPER_OUT_DIR" --pattern "${rep_name}_chunk_" --outfile "${GROUP_OUT_DIR}/${rep_name}_profile.txt"
