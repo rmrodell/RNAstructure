@@ -89,7 +89,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Check for missing required arguments
-if [[ -z "$SAMPLE_MAP_FILE" || -z "$BASE_PIPELINE_DIR" || -z "$REF_FASTA_DIR" || -z "$REF_RNAFOLD_FASTA" || -z "$NUM_GROUPS" ]]]; then
+if [[ -z "$SAMPLE_MAP_FILE" || -z "$BASE_PIPELINE_DIR" || -z "$REF_FASTA_DIR" || -z "$REF_RNAFOLD_FASTA" || -z "$NUM_GROUPS" ]]; then
     echo "ERROR: One or more required arguments are missing."
     usage
 fi
@@ -99,7 +99,7 @@ if [[ ! -f "$SAMPLE_MAP_FILE" ]]; then echo "ERROR: Sample map file not found: $
 if [[ ! -d "$REF_FASTA_DIR" ]]; then echo "ERROR: Reference FASTA directory not found: ${REF_FASTA_DIR}"; exit 1; fi
 if [[ ! -f "$REF_RNAFOLD_FASTA" ]]; then echo "ERROR: RNAfold reference FASTA not found: ${REF_RNAFOLD_FASTA}"; exit 1; fi
 if [ -z "$SLURM_ARRAY_TASK_ID" ]; then echo "ERROR: This script must be run as a Slurm job array."; exit 1; fi
-if [ "$SLURM_ARRAY_TASK_COUNT" -ne "$NUM_SAMPLES" ]; then echo "Warning: --num-samples (${NUM_SAMPLES}) does not match Slurm array count (${SLURM_ARRAY_TASK_COUNT})."; fi
+if [ "$SLURM_ARRAY_TASK_COUNT" -ne "$NUM_GROUPS" ]; then echo "Warning: --num-groups (${NUM_GROUPS}) does not match Slurm array count (${SLURM_ARRAY_TASK_COUNT})."; fi
 
 # --- 2. DEFINE PATHS AND VARIABLES ---
 # --- Script Directories ---
@@ -141,11 +141,16 @@ process_replicate() {
     local rep_name="$1"
     echo "--- [START] Processing Replicate: ${rep_name} ---"
 
-    map_line=$(grep "^${rep_name}\b" "$SAMPLE_MAP_FILE")
-    untreated_fq=$(echo "$map_line" | cut -f2)
-    modified_fq=$(echo "$map_line" | cut -f3)
+    map_line=$(awk -F'\t' -v name="$rep_name" 'NR > 1 && $2 == name' "$SAMPLE_MAP_FILE")
+    untreated_fq=$(echo "$map_line" | cut -f3)
+    modified_fq=$(echo "$map_line" | cut -f4)
 
-    if [[ ! -f "$untreated_fq" || ! -f "$modified_fq" ]]; then echo "ERROR: FASTQ files for ${rep_name} not found."; exit 1; fi
+    if [[ -z "$map_line" || ! -f "$untreated_fq" || ! -f "$modified_fq" ]]; then
+        echo "ERROR: FASTQ files for '${rep_name}' not found or line could not be parsed from sample map."
+        echo "DEBUG: Extracted Untreated Path: '${untreated_fq}'"
+        echo "DEBUG: Extracted Modified Path: '${modified_fq}'"
+        exit 1
+    fi
     echo "Found FASTQs: Untreated=${untreated_fq}, Modified=${modified_fq}"
 
     echo "[${rep_name}] Step 1: Running SHAPE-Mapper..."
@@ -172,7 +177,7 @@ process_replicate() {
 ml biology viennarna R
 
 # Find all replicate sample names for the current group
-REPLICATE_NAMES=($(awk -F'\t' -v group="$GROUP_NAME" -v group_col="$GROUP_COL" 'NR > 1 && $group_col == group {print $1}' "$SAMPLE_MAP_FILE"))
+REPLICATE_NAMES=($(awk -F'\t' -v group="$GROUP_NAME" -v group_col="$GROUP_COL" 'NR > 1 && $group_col == group {print $2}' "$SAMPLE_MAP_FILE"))
 NUM_REPS=${#REPLICATE_NAMES[@]}
 
 echo "Found ${NUM_REPS} sample(s) for group '${GROUP_NAME}': ${REPLICATE_NAMES[*]}"
