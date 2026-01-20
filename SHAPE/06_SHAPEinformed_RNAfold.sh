@@ -120,7 +120,7 @@ for rna_name in $RNA_NAME_LIST; do
 
         # Extract the sequence for this specific RNA.
         # This command finds the header line, gets the next line, and joins it.
-        sequence=$(awk -v name="^>${rna_name}" 'BEGIN{p=0} $0~name{p=1;next} /^>/{p=0} p{printf "%s", $0}' "$FASTA_FILE")
+        sequence=$(awk -v name="^>${rna_name}$" 'BEGIN{p=0} $0~name{p=1;next} /^>/{p=0} p{printf "%s", $0}' "$FASTA_FILE")
 
         # Run RNAfold. Output files (e.g., RNA_NAME_ss.ps) will be created in the current directory.
         RNAfold -p --shape="$shape_file" --MEA <<< ">${rna_name}
