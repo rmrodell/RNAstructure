@@ -7,6 +7,7 @@
 
 set -e
 set -o pipefail
+# set -x
 
 # --- Usage function ---
 usage() {
@@ -53,7 +54,7 @@ fi
 # # --- Setup Directories and Logging for THIS script ---
 mkdir -p "$OUTPUT_DIR"
 LOG_FILE="${OUTPUT_DIR}/wrapper_pipeline_run.log"
-exec > "$LOG_FILE" 2>&1
+# exec >> "$LOG_FILE" 2>&1
 
 # --- Define path for the list of failed targets and initialize it ---
 FAILED_TARGETS_LIST="${OUTPUT_DIR}/${PREFIX}_failed_targets.txt"
@@ -69,7 +70,6 @@ RNA_TARGETS=$(grep '^>' "$FASTA_FILE" | awk '{print substr($1,2)}')
 
 # For testing with just 15 sequences:
 # RNA_TARGETS=$(echo "$RNA_TARGETS" | head -n 15)
-
 
 echo "Found the following targets to process (first 10 shown):"
 echo "$RNA_TARGETS" | head -n 10
