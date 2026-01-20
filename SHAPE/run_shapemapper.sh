@@ -25,7 +25,7 @@ FASTA_DIR="$5"
 # =========================================================================
 
 # --- Path to the SHAPE-Mapper executable ---
-SHAPEMAPPER_EXEC="/oak/stanford/groups/nicolemm/rodell/shapemapper2-2.3/shapemapper"
+SHAPEMAPPER_EXEC="/oak/stanford/groups/nicolemm/shapemapper2-2.3/shapemapper"
 
 # --- Input FASTA Directory (contains all the .fasta chunk files) ---
 # FASTA_DIR="/home/groups/nicolemm/rodell/pool1/fasta_chunks"
@@ -60,7 +60,7 @@ for REF_FASTA in "${FASTA_DIR}"/*.fasta; do
     # Extract the core chunk name (e.g., "pool1_chunk_1") from the full path
     CHUNK_FILENAME=$(basename "${REF_FASTA}" .fasta)
     # Extract just the chunk identifier (e.g., "chunk_1")
-    CHUNK_ID=$(echo "${CHUNK_FILENAME}" | cut -d'_' -f2,3)
+    CHUNK_ID=$(echo "${CHUNK_FILENAME}" | awk -F'_' '{print $(NF-1)"_"$(NF)}')
     # Create a unique sample name for this specific chunk
     SAMPLE_NAME="${SAMPLE_BASE_NAME}_${CHUNK_ID}" # e.g., "Rep1_NoPus_chunk_1"
     # Define unique output and log paths for this chunk
