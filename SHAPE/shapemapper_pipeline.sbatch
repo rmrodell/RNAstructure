@@ -13,6 +13,7 @@
 #   --sample-map <path>         Path to the TSV file mapping sample names to FASTQ files. (Required)
 #   --output-dir <path>         Base directory for all pipeline outputs. (Required)
 #   --ref-fasta-dir <path>      Directory containing FASTA chunks for SHAPE-Mapper. (Required)
+#   --keyword <string>          Keyword in FASTA chunks that comes before numbering (Default: chunk)
 #   --ref-rnafold-fasta <path>  Single FASTA file for RNAfold. (Required)
 #   --num-groups <int>          Total number of unique sample groups to process. (Required)
 #   --group-col <int>           Column number for the group name in the sample map (Default: 1)
@@ -31,7 +32,7 @@
 #       --output-dir /path/to/pipeline_output \
 #       --ref-fasta-dir /path/to/fasta_chunks \
 #       --ref-rnafold-fasta /path/to/rnafold.fasta \
-#       --num-groups N
+#       --num-groups N --keyword "chunk"
 #   (Where N is the number of unique groups, e.g., 2 for HEK293T and HepG2)
 #
 # ===================================================================================
@@ -62,6 +63,7 @@ usage() {
     echo ""
     echo "Optional Arguments:"
     echo "  --group-col <int>             Column number for the GroupName in the sample map (Default: 1)."
+    echo "  --keyword <int>               Keyword in FASTA chunks that comes before numbering (Default: chunk)"
     echo "  -h, --help                    Display this help message and exit."
     exit 1
 }
@@ -73,6 +75,7 @@ REF_FASTA_DIR=""
 REF_RNAFOLD_FASTA=""
 NUM_GROUPS=""
 GROUP_COL=1 # Default column for GroupName
+KEYWORD="chunk" # Default column for keyword
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -82,6 +85,7 @@ while [[ "$#" -gt 0 ]]; do
         --ref-rnafold-fasta) REF_RNAFOLD_FASTA="$2"; shift ;;
         --num-groups) NUM_GROUPS="$2"; shift ;;
         --group-col) GROUP_COL="$2"; shift ;;
+        --keyword) KEYWORD="$2"; shift ;;
         -h|--help) usage ;;
         *) echo "ERROR: Unknown parameter passed: $1"; usage ;;
     esac
@@ -161,13 +165,17 @@ process_replicate() {
 
     echo "[${rep_name}] Step 3: Extracting poor quality RNA list..."
     # bash "${SHAPE_SCRIPT_DIR}/03_extract_poor_quality_rnas.sh" --log-file "${SHAPEMAPPER_OUT_DIR}/logs/${rep_name}_batch_run.log" --outfile "${GROUP_OUT_DIR}/${rep_name}_poor_quality_rna.txt"
-    grep "possible poor quality reactivity profiles" "${SHAPEMAPPER_OUT_DIR}/logs/${rep_name}_chunk_"*.log | \
+    grep "possible poor quality reactivity profiles" "${SHAPEMAPPER_OUT_DIR}/logs/${rep_name}_${KEYWORD}_"*.log | \
     awk -F':' '{sub(/^[ ]+/, "", $NF); print $NF}' | \
     awk '{gsub(/, /,"\n"); print}' | \
     sort -u > "${GROUP_OUT_DIR}/${rep_name}_poor_quality_rna.txt"
     
     echo "[${rep_name}] Step 4: Annotating profiles..."
-    Rscript "${SHAPE_SCRIPT_DIR}/04_SHAPE_annotate_profiles.R" --profile "${GROUP_OUT_DIR}/${rep_name}_profile.txt" --list "${GROUP_OUT_DIR}/${rep_name}_poor_quality_rna.txt" --outfile "${GROUP_OUT_DIR}/${rep_name}_profile_annotated.txt"
+    Rscript "${SHAPE_SCRIPT_DIR}/04_SHAPE_annotate_profiles.R" \
+            --profile "${GROUP_OUT_DIR}/${rep_name}_profile.txt" \
+            --list "${GROUP_OUT_DIR}/${rep_name}_poor_quality_rna.txt" \
+            --outfile "${GROUP_OUT_DIR}/${rep_name}_profile_annotated.txt" \
+            --keyword "${KEYWORD}"
 
     echo "--- [DONE] Processing Replicate: ${rep_name} ---"
 }

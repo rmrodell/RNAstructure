@@ -15,12 +15,15 @@
 #                         (Required)
 #   -l, --list    <path>  Path to the text file containing the list of poor-quality
 #                         RNA names (one name per line). (Required)
+#   -k, --keyword <string>  The keyword in the filename that separates the chunk
+#                           number from the RNA name (e.g., "chunk"). (Required)
 #   -o, --outfile <path>  Path for the final, annotated output file. (Required)
 #
 # Example Usage:
 #   Rscript annotate_profiles.R \
 #       --profile /path/to/combined_profile.txt \
 #       --list /path/to/poor_quality_rnas.txt \
+#       --keyword "chunk" \
 #       --outfile /path/to/annotated_profile.txt
 # =========================================================================
 
@@ -47,6 +50,8 @@ parser$add_argument("-p", "--profile", type = "character", required = TRUE,
                     help = "Path to the combined profile.txt file.")
 parser$add_argument("-l", "--list", type = "character", required = TRUE,
                     help = "Path to the list of poor-quality RNA names.")
+parser$add_argument("-k", "--keyword", type = "character", required = TRUE,
+                    help = "Keyword in filename for parsing (e.g., 'chunk').")
 parser$add_argument("-o", "--outfile", type = "character", required = TRUE,
                     help = "Path for the final annotated output file.")
 
@@ -57,6 +62,7 @@ cat("Starting SHAPE profile annotation...\n")
 cat("----------------------------------------\n")
 cat("Profile File:", args$profile, "\n")
 cat("RNA List File:", args$list, "\n")
+cat("Filename Keyword:", args$keyword, "\n")
 cat("Output File:", args$outfile, "\n")
 cat("----------------------------------------\n")
 
@@ -77,8 +83,9 @@ poor_quality_rnas <- fread(args$list, header = FALSE, sep = "\n", col.names = c(
 
 # --- Feature Engineering: Extract RNA Name from 'file_name' ---
 cat("Extracting RNA names from 'file_name' column...\n")
-# This regex captures the text between "..._chunk_[number]_" and "_profile.txt"
-profile_data[, RNA_name := sub("^.*_chunk_\\d+_(.*)_profile\\.txt$", "\\1", file_name)]
+# This captures the text between "..._<keyword>_[number]_" and "_profile.txt"
+regex_pattern <- paste0("^.*_", args$keyword, "_\\d+_(.*)_profile\\.txt$")
+profile_data[, RNA_name := sub(regex_pattern, "\\1", file_name)]
 cat(" -> A new 'RNA_name' column has been created.\n")
 
 
