@@ -4,7 +4,7 @@
 
 # --- Configuration ---
 # Define the path to your complete, original FASTA file
-PARENT_FASTA="/home/groups/nicolemm/rodell/pool1/pool1_prettyplease_noadapters.fasta"
+PARENT_FASTA="/home/groups/nicolemm/rodell/pool1/pool1_cleaned_noadapters.fasta"
 
 # Define the directory where you want the split FASTA chunks to be saved
 FASTA_DIR="/home/groups/nicolemm/rodell/pool1/fasta_chunks"

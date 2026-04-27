@@ -1,9 +1,228 @@
 # RNAstructure
 Code for analysis of RNA structure
 
-## motif matcher
+## RNAfold
+To gather information of pairing probabilities and folding energies, Vienna RNA 2.5.1 is used. The following scripts are optimized to use on Sherlock, Stanford's HPC.
 
-Code to identify structure motifs in RNA structures where .fold files are available.
+Use as follows:
+
+```
+bash run_RNAfold.sh <fasta_file> <output_dir>
+```
+
+This runs RNAfold on every sequence in the given fasta and outputs all files to the specified directory.
+
+To concatenate these to a single csv file more suitable for downstream analysis, use `extract_pairing_prob.R` and `fold_summary.R` as described below.
+
+```
+Rscript extract_pairing_prob.R \
+    -i <input directory> \
+    -o <output csv> \
+    -l <sequence length>
+```
+
+The above script extracts the pairing probabilites from the "ubox" lines in all dp.ps files output by RNAfold. This represents the total of all pairing probabilities for a given sequence, NOT the pairing probabilites of the MFE structures. The sequence length argument dictates how many columns will be created and should be equivalent to the length of the sequence. To extract the pairing probabilities of the MFE structure, use the script `RNAFold_MFE.R`.
+
+```
+Rscript fold_summary.R \
+    -i <input directory> \
+    -o <output csv>
+```
+
+The above script extracts information from all of the .fold files produced by RNAfold. This includes the sequence and dot-bracket notation for the MFE, MEA, and centroid structures, as well as the free energy (delta G) for those respective structure.
+
+## Nano-SHAPE-Amp Pipeline (SHAPE subfolder)
+
+### Mapping Reads: Nanopore Pipeline
+This pipeline is optimized to run on Stanford's HPC Sherlock system. Make sure you adjust have the following installed and adjust package loading appropriately:
+
+- samtools 1.16.1
+- cutadapt 1.18 (requires Python 3.6)
+- java 11
+- bowtie2 2.3.4.1
+- UMICollapse: https://github.com/Daniel-Liu-c0deb0t/UMICollapse
+
+Start from a bam file labeled with a barcode from Nanopore basecalling outputs, ideally with super-high-accuracy basecalling since this is SHAPE and expected mutation rates are very low.
+
+The pipeline `SHAPE/SHAPE_trim_map_dedup_mpra.sh` goes through the following steps:
+
+1. Convert bam to fastq, renaming from barcode in the process.
+2. Trim Nanopore adapters from the fastq in sense and antisense directions.
+3. Reverse complement the antisense to unify orientation of reads.
+4. Extract UMIs.
+5. Trim the MPRA adapters in the sense direction.
+6. Map reads with bowtie2.
+7. Convert to sorted bam & index.
+8. Deduplicate reads.
+9. Convert to fastq for input into shapemapper
+
+The following variables are hardcoded into `SHAPE/process_single_file.sh`:
+
+- SENSE_ADAPTER_5PRIME="TTTCTGTTGGTGCTGATATTGCG"
+- SENSE_ADAPTER_3PRIME="GAAGATAGAGCGACAGGCAAGT"
+- ANTISENSE_ADAPTER_5PRIME="ACTTGCCTGTCGCTCTATCTTC"
+- ANTISENSE_ADAPTER_3PRIME="CGCAATATCAGCACCAACAGAAA"
+- POOL_SENSE_ADAPTER_5PRIME="GACGCTCTTCCGATCT"
+- POOL_SENSE_ADAPTER_3PRIME="CACTCGGGCACCAAGGAC"
+- UMI_PATTERN="NNNNNNNNNN"
+
+To use, you need to submit it as a slurm array using `SHAPE/submit_slurm_array.sh`.
+
+Example command:
+
+```
+bash SHAPE/submit_slurm_array.sh \
+    --mail-user you@institution.edu \
+    --script-path SHAPE/SHAPE_trim_map_dedup_mpra.sh \
+    --map-file <barcodes.txt> \
+    --input-dir <basecalling output directory> \
+    --output-dir <output dir> \
+    --bowtie-index <bowtie index>
+```
+
+The barcodes file should be formatted as follows:
+
+```
+HEK293T_SHAPE_Rep1:barcode75 
+HEK293T_DMSO_Rep1:barcode76 
+```
+
+This will submit an individual job for each bam file in the bam directory. The final deduplicated fastq will be located in a directory inside the output directory.
+
+**Note**: This mapping pipeline is NOT optimized for a mutagenesis pool with closely related sequences, even with barcodes. That is an outstanding problem that I am still looking to solve.
+
+### Mapping Reads: Illumina Pipeline
+
+The Illumina data starts in a slightly different place, namely pair-ended reads, than the Nanopore data, so it requires a slightly different pipeline.
+
+The same packages are still required:
+
+- samtools 1.16.1
+- cutadapt 1.18 (requires Python 3.6)
+- java 11
+- bowtie2 2.3.4.1
+- UMICollapse: https://github.com/Daniel-Liu-c0deb0t/UMICollapse
+
+The pipeline `SHAPE/process_single_file_illumina_downsample.sh` goes through the following steps:
+
+1. Starts with pair-ended .fastq.gz files.
+2. Extract UMIs from the start of R2 and appends it to R1 headers.
+3. Trims 3' adapters from R1.
+4. Downsamples to ~20M reads to approximately match the read counts in the Nanopore sample.
+5. Map reads with bowtie2.
+6. Convert to sorted bam & index.
+7. Deduplicate reads.
+8. Convert to fastq for input into shapemapper
+
+The following variables are hardcoded into process_single_file.sh:
+
+- SENSE_ADAPTER_5PRIME="TTTCTGTTGGTGCTGATATTGCG"
+- SENSE_ADAPTER_3PRIME="GAAGATAGAGCGACAGGCAAGT"
+- ANTISENSE_ADAPTER_5PRIME="ACTTGCCTGTCGCTCTATCTTC"
+- ANTISENSE_ADAPTER_3PRIME="CGCAATATCAGCACCAACAGAAA"
+- POOL_SENSE_ADAPTER_5PRIME="GACGCTCTTCCGATCT"
+- POOL_SENSE_ADAPTER_3PRIME="CACTCGGGCACCAAGGAC"
+- UMI_PATTERN="NNNNNNNNNN"
+
+To use, you need to submit it as a slurm array using `SHAPE/submit_slurm_array_illumina.sh`
+
+Example command:
+
+```
+bash /SHAPE/submit_slurm_array_illumina.sh \
+    --mail-user you@institution.edu \
+    --script-path SHAPE/process_single_file_illumina_downsample.sh" \
+    --sample-map <map_file.tsv> \
+    --output-dir <output dir> \
+    --ref-index <bowtie index> 
+``` 
+
+The sample map file should be formatted as follows:
+
+```
+No_PUS_DMSO No_PUS_DMSO_S4_L001_R1_001.fastq.gz No_PUS_DMSO_S4_L001_R2_001.fastq.gz
+No_PUS_SHAPE    No_PUS_SHAPE_S3_L001_R1_001.fastq.gz    No_PUS_SHAPE_S3_L001_R2_001.fastq.gz
+```
+
+This will submit an individual job for each pair of fastq files in the map file. The final deduplicated fastq will be located in a directory inside the output directory.
+
+### SHAPE-Mapper
+This pipeline `SHAPE/shapemapper_pipeline.sbatch` goes through the following steps:
+
+1. Runs shapemapper2-2.3 paired fastq files (DMSO and SHAPE)
+2. Annotates RNAs with poor quality scores
+3. Produces correlation plots of the replicates
+4. Averages SHAPE reactivities across replicates
+5. Performs SHAPE-informed RNA fold
+6. Extracts pairing probabilities and structure feature summaries
+
+This pipeline works the same for reads of Nanopore or Illumina origin, once they have been processed through the above pipelines.
+
+One limitations of shapemapper is the number of sequences it can process at a given time. It will crash if your reference FASTA has more than ~100 sequences (represented by > header lines). To get around this, you should "chunk" your fasta into smaller lists. This script will run the chunks separately and then concatenate the results.
+
+Shapemapper log output includes a list of "poor quality" RNAs, indicating an issue identified during processing. This typically results from inadequate read coverage for a given sequence. Low coverage can skew reactivities, so these should be excluded from downstream analysis, which is what the annotation section does.
+
+In the presence of multiple replicates, inverse variance weighting averaging is used to create one set of shape reactivites to go into RNAfold.
+
+After running SHAPE-informed RNAfold, pairing probabilities and folding information is extracted using the same scripts as in the RNAfold folder. Structures are also visualized with SHAPE reactivities as described below.
+
+This script is optimized to work on Sherlock, Stanford's HPC. The following packages are required for this to run:
+
+- Vienna RNA 2.5.1
+- shapemapper2-2.3 https://github.com/Weeks-UNC/shapemapper2
+
+Example command to run a single condition with two replicates:
+
+```
+sbatch --array=1-2 \
+    --mail-user=you@institution.edu \
+    ~/PUS7regulation2026/Figure4/SHAPE_mapper/shapemapper_pipeline.sbatch \
+        --sample-map <sample_map.tsv> \
+        --output-dir <sample output dir> \
+        --ref-fasta-dir <reference_fasta_chunks> \
+        --ref-rnafold-fasta <reference_fasta> \
+        --num-samples 1
+```
+
+
+The sample map should look as follows:
+
+```
+GroupName       SampleName      Untreated       Treated
+PUS7    PUS7_Rep1       PUS7_1_DMSO_deduplicated_for_shapemapper.fastq    PUS7_1_SHAPE_deduplicated_for_shapemapper.fastq
+PUS7    PUS7_Rep2       PUS7_2_DMSO_deduplicated_for_shapemapper.fastq    PUS7_2_SHAPE_deduplicated_for_shapemapper.fastq
+```
+
+## Structure Visualization
+These script automates the batch generation of 2D RNA MEA structure vector-based SVG diagrams using VARNA, without or without mapping SHAPE reactivity data to nucleotide colors (low, medium, high). It can also draw a custom bounding box and apply special formatting to highlight a specific nucleotide position of interest, such as the target uridine.
+
+These scripts require python 3.9.
+
+Activate the virtual environment and use as follows:
+
+```
+source varna/varna-env/bin/activate
+
+python3 varna/run_varna_highlight_SHAPE.py \
+  --input-csv <fold summary csv> \
+  --shape-dir <shape directory> \
+  --highlight-csv <highlight csv> \
+  --output-dir <output dir> 
+
+python3 varna/run_varna_highlight.py \
+  --input-csv <fold summary csv> \
+  --highlight-pos <int>> \
+  --output-dir <output dir> 
+```
+
+The fold summary csv should contain the sequence and dot-bracket notation of the MEA structure, and which can be produced by `fold_summary.R`.
+
+The highlight csv should contain the site name and highlight position (1-indexed) (optional arguments to specify) for the residue that should be highlighted in pink for the SHAPE script. For the non-SHAPE script, the highlight is done at a single consistent position.
+
+
+## Parameter Sweep / motif matcher
+
+Code to identify structure motifs in RNA structures where .fold files are available. None of this code was actually used in mutagenesis for Pool2, so proceed with caution and an informed perspective.
 
 ### original version
 Created by Ronit Jain.

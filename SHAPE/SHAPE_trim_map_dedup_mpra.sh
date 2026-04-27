@@ -336,7 +336,7 @@ fi
 
 # --- Step 11: Clean up intermediate files ---
 log_message "Step 11: Intermediate file cleanup is currently disabled."
-rm -rf "$TMP_DIR"
+# rm -rf "$TMP_DIR"
 
 log_message "--- Pipeline for ${SAMPLE_ID} finished successfully! ---"
 
